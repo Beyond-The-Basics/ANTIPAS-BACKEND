@@ -13,10 +13,15 @@ truth for domain decisions; this repo implements them.
 
 Uses `uv` for dependency/venv management. Prefix Python commands with `uv run`.
 
+A `Makefile` wraps all of these; run `make help` for the list. Key one-shot:
+`make test-instance` = install + .env + infra + wait-for-db + migrate + seed + serve — a fully
+ready-for-testing instance.
+
 ```bash
 uv sync                       # install deps into .venv from uv.lock
 docker compose up -d postgres redis   # local Postgres + Redis (needed for the API/migrations/worker)
 uv run alembic upgrade head           # apply migrations
+uv run python -m app.db.seed          # seed reference data (game type catalog); idempotent
 uv run uvicorn app.main:app --reload  # run API at http://localhost:8000 (docs at /docs, admin at /admin)
 
 uv run pytest                 # run all tests
@@ -50,8 +55,11 @@ internal moderation tooling.
 - `app/models/` — SQLAlchemy models, one file per domain area. **All models must be imported in
   `app/models/__init__.py`** — Alembic autogenerate and SQLAdmin both discover tables via
   `Base.metadata`, so a model missing from that file silently won't get a migration. All status/enum
-  columns use `StrEnum`s from `app/models/enums.py` mapped with `Enum(..., native_enum=False)` (stored
-  as strings, no Postgres enum types).
+  columns use `StrEnum`s from `app/models/enums.py` mapped via the `str_enum()` helper there — it stores
+  the enum *value* (e.g. `"soccer"`) as a VARCHAR, not the member name, and uses no native Postgres enum
+  type. Always use `str_enum(SomeEnum)` for enum columns rather than SQLAlchemy's bare `Enum(...)`.
+- `app/db/seed.py` — idempotent reference-data seeding (the `GameType` catalog). Run via
+  `python -m app.db.seed` / `make seed` after migrating.
 - `app/api/v1/` — `router.py` aggregates endpoint routers under the `/api/v1` prefix (set in settings).
   Add new resource routers there.
 - `app/services/` — business-logic layer (currently empty; put credit charging, match confirmation,

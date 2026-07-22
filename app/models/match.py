@@ -1,12 +1,12 @@
 import uuid
 from datetime import date
 
-from sqlalchemy import Date, Enum, ForeignKey, String
+from sqlalchemy import Date, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base_class import Base, TimestampMixin, UUIDPKMixin
-from app.models.enums import MatchStatus, Sport
+from app.models.enums import MatchStatus, Sport, str_enum
 
 
 class Match(UUIDPKMixin, TimestampMixin, Base):
@@ -17,13 +17,13 @@ class Match(UUIDPKMixin, TimestampMixin, Base):
     )
     team_a_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), index=True)
     team_b_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), index=True)
-    sport: Mapped[Sport] = mapped_column(Enum(Sport, native_enum=False, length=32))
+    sport: Mapped[Sport] = mapped_column(str_enum(Sport, length=32))
     game_type_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("game_types.id"))
     city: Mapped[str] = mapped_column(String(120))
     pitch: Mapped[str] = mapped_column(String(255))
     date: Mapped[date] = mapped_column(Date)
     status: Mapped[MatchStatus] = mapped_column(
-        Enum(MatchStatus, native_enum=False, length=24), default=MatchStatus.CONFIRMED
+        str_enum(MatchStatus, length=24), default=MatchStatus.CONFIRMED
     )
 
 

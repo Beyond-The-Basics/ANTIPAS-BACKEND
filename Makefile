@@ -41,6 +41,16 @@ infra-stop: ## Stop Postgres + Redis (keep data)
 dev: env infra migrate ## One command: env + infra + migrate + reload server
 	$(UV) run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
+.PHONY: test-instance
+test-instance: install env infra wait-db migrate seed ## Spin up a fully-ready-for-testing instance and serve it
+	@echo ""
+	@echo "  Backend ready for testing:"
+	@echo "    API   -> http://localhost:8000"
+	@echo "    Docs  -> http://localhost:8000/docs"
+	@echo "    Admin -> http://localhost:8000/admin"
+	@echo ""
+	$(UV) run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
 .PHONY: run
 run: ## Run the API server (reload) — assumes infra is already up
 	$(UV) run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
@@ -77,9 +87,21 @@ ps: ## Show container status
 
 # ---- database / migrations ----------------------------------------------
 
+.PHONY: wait-db
+wait-db: ## Block until the Postgres container reports healthy
+	@echo "waiting for Postgres to be healthy..."
+	@until [ "$$($(COMPOSE) ps -q postgres | xargs -r docker inspect -f '{{.State.Health.Status}}')" = "healthy" ]; do \
+		sleep 1; \
+	done
+	@echo "Postgres is healthy."
+
 .PHONY: migrate
 migrate: ## Apply all migrations (alembic upgrade head)
 	$(UV) run alembic upgrade head
+
+.PHONY: seed
+seed: ## Seed reference data (game type catalog); idempotent
+	$(UV) run python -m app.db.seed
 
 .PHONY: migration
 migration: ## Autogenerate a migration: make migration m="message" (Postgres must be running)

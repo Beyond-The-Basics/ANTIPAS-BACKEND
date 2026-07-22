@@ -8,11 +8,20 @@ Firebase Auth (phone/OTP). Managed with [uv](https://docs.astral.sh/uv/).
 
 ## Quick start
 
+The fastest path to a running, testable instance:
+
+```bash
+make test-instance    # install + .env + infra + wait-for-db + migrate + seed + serve
+```
+
+Or step by step:
+
 ```bash
 uv sync                                  # install dependencies
 cp .env.example .env                     # defaults match docker-compose
 docker compose up -d postgres redis      # local infra
 uv run alembic upgrade head              # create the schema
+uv run python -m app.db.seed             # seed reference data (game types)
 uv run uvicorn app.main:app --reload     # http://localhost:8000
 ```
 

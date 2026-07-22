@@ -1,5 +1,18 @@
 import enum
 
+from sqlalchemy import Enum as SAEnum
+
+
+def str_enum(enum_cls: type[enum.StrEnum], length: int = 32) -> SAEnum:
+    """SQLAlchemy column type for a StrEnum that stores the member *value* (e.g. "soccer"),
+    not the member *name* ("SOCCER"), as a VARCHAR (no native Postgres enum type)."""
+    return SAEnum(
+        enum_cls,
+        native_enum=False,
+        length=length,
+        values_callable=lambda e: [m.value for m in e],
+    )
+
 
 class Sport(enum.StrEnum):
     SOCCER = "soccer"

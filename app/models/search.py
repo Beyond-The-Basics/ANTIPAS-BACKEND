@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, Enum, ForeignKey, String
+from sqlalchemy import Date, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -11,6 +11,7 @@ from app.models.enums import (
     ApplicationStatus,
     ListingStatus,
     Sport,
+    str_enum,
 )
 
 
@@ -22,7 +23,7 @@ class RosterSearch(UUIDPKMixin, TimestampMixin, Base):
     team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), index=True)
     city: Mapped[str] = mapped_column(String(120), index=True)
     status: Mapped[ListingStatus] = mapped_column(
-        Enum(ListingStatus, native_enum=False, length=16), default=ListingStatus.OPEN
+        str_enum(ListingStatus, length=16), default=ListingStatus.OPEN
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -37,10 +38,10 @@ class RosterApplication(UUIDPKMixin, TimestampMixin, Base):
     team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     direction: Mapped[ApplicationDirection] = mapped_column(
-        Enum(ApplicationDirection, native_enum=False, length=24)
+        str_enum(ApplicationDirection, length=24)
     )
     status: Mapped[ApplicationStatus] = mapped_column(
-        Enum(ApplicationStatus, native_enum=False, length=16), default=ApplicationStatus.PENDING
+        str_enum(ApplicationStatus, length=16), default=ApplicationStatus.PENDING
     )
 
 
@@ -50,13 +51,13 @@ class OpponentSearch(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "opponent_searches"
 
     team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), index=True)
-    sport: Mapped[Sport] = mapped_column(Enum(Sport, native_enum=False, length=32))
+    sport: Mapped[Sport] = mapped_column(str_enum(Sport, length=32))
     game_type_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("game_types.id"))
     city: Mapped[str] = mapped_column(String(120), index=True)
     pitch: Mapped[str] = mapped_column(String(255))
     date: Mapped[date] = mapped_column(Date)
     status: Mapped[ListingStatus] = mapped_column(
-        Enum(ListingStatus, native_enum=False, length=16), default=ListingStatus.OPEN
+        str_enum(ListingStatus, length=16), default=ListingStatus.OPEN
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -71,7 +72,7 @@ class OpponentApplication(UUIDPKMixin, TimestampMixin, Base):
         UUID(as_uuid=True), ForeignKey("teams.id"), index=True
     )
     status: Mapped[ApplicationStatus] = mapped_column(
-        Enum(ApplicationStatus, native_enum=False, length=16), default=ApplicationStatus.PENDING
+        str_enum(ApplicationStatus, length=16), default=ApplicationStatus.PENDING
     )
 
 
@@ -84,7 +85,7 @@ class GuestSearch(UUIDPKMixin, TimestampMixin, Base):
     team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), index=True)
     city: Mapped[str] = mapped_column(String(120), index=True)
     status: Mapped[ListingStatus] = mapped_column(
-        Enum(ListingStatus, native_enum=False, length=16), default=ListingStatus.OPEN
+        str_enum(ListingStatus, length=16), default=ListingStatus.OPEN
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
 
@@ -100,10 +101,10 @@ class GuestApplication(UUIDPKMixin, TimestampMixin, Base):
     team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     direction: Mapped[ApplicationDirection] = mapped_column(
-        Enum(ApplicationDirection, native_enum=False, length=24)
+        str_enum(ApplicationDirection, length=24)
     )
     status: Mapped[ApplicationStatus] = mapped_column(
-        Enum(ApplicationStatus, native_enum=False, length=16), default=ApplicationStatus.PENDING
+        str_enum(ApplicationStatus, length=16), default=ApplicationStatus.PENDING
     )
 
 
@@ -113,9 +114,9 @@ class PlayerAvailability(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "player_availabilities"
 
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
-    sport: Mapped[Sport] = mapped_column(Enum(Sport, native_enum=False, length=32))
+    sport: Mapped[Sport] = mapped_column(str_enum(Sport, length=32))
     city: Mapped[str] = mapped_column(String(120), index=True)
     status: Mapped[ListingStatus] = mapped_column(
-        Enum(ListingStatus, native_enum=False, length=16), default=ListingStatus.OPEN
+        str_enum(ListingStatus, length=16), default=ListingStatus.OPEN
     )
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
