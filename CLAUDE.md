@@ -71,10 +71,11 @@ internal moderation tooling.
 - `app/schemas/` — Pydantic request/response models (`*Create`/`*Update`/`*Read`); `Read` models use
   `ConfigDict(from_attributes=True)`.
 - `app/services/` — business-logic layer. `team_service.py` (team/membership rules),
-  `roster_service.py` (RosterSearch publish/browse/close + the RosterApplication invite/apply/accept
-  flow that creates/reactivates memberships), and `credit_service.py` (**stub** `charge_publish` — the
-  real `CreditTransaction` ledger is a later PR). Put match confirmation and listing state transitions
-  here too, not in endpoints.
+  `roster_service.py` (RosterSearch + RosterApplication invite/apply/accept → membership),
+  `opponent_service.py` (OpponentSearch + OpponentApplication; confirming an application creates a
+  `Match`, auto-declines the rest, and closes the search), `match_service.py` (match read/cancel/mark-
+  played), and `credit_service.py` (**stub** `charge_publish` — the real `CreditTransaction` ledger is
+  a later PR). Keep endpoints thin; new domain logic goes here.
 - `app/workers/` — `celery_app.py` (Celery instance + beat schedule) and `tasks.py`. The beat schedule
   runs `expire_stale_listings` every 10 min; expiring listings and the non-engagement credit refund are
   stubbed and need implementing against the four listing tables.
