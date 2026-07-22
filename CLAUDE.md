@@ -70,9 +70,11 @@ internal moderation tooling.
   client; the backend only verifies the ID token. Needs `FIREBASE_CREDENTIALS_PATH` (service-account JSON).
 - `app/schemas/` — Pydantic request/response models (`*Create`/`*Update`/`*Read`); `Read` models use
   `ConfigDict(from_attributes=True)`.
-- `app/services/` — business-logic layer. `team_service.py` holds team/membership rules (captain
-  succession, admin delegation, leave/remove). Put credit charging, match confirmation, and listing
-  state transitions here too, not in endpoints.
+- `app/services/` — business-logic layer. `team_service.py` (team/membership rules),
+  `roster_service.py` (RosterSearch publish/browse/close + the RosterApplication invite/apply/accept
+  flow that creates/reactivates memberships), and `credit_service.py` (**stub** `charge_publish` — the
+  real `CreditTransaction` ledger is a later PR). Put match confirmation and listing state transitions
+  here too, not in endpoints.
 - `app/workers/` — `celery_app.py` (Celery instance + beat schedule) and `tasks.py`. The beat schedule
   runs `expire_stale_listings` every 10 min; expiring listings and the non-engagement credit refund are
   stubbed and need implementing against the four listing tables.
