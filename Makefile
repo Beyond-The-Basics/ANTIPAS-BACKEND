@@ -118,8 +118,18 @@ psql: ## Open a psql shell in the Postgres container
 
 # ---- quality -------------------------------------------------------------
 
+.PHONY: test-db
+test-db: ## Create the antipas_test database if missing (integration tests use it)
+	@$(COMPOSE) exec -T postgres psql -U antipas -d antipas -tc \
+		"SELECT 1 FROM pg_database WHERE datname='antipas_test'" | grep -q 1 \
+		|| $(COMPOSE) exec -T postgres psql -U antipas -d antipas -c "CREATE DATABASE antipas_test;"
+
 .PHONY: test
-test: ## Run the test suite
+test: infra wait-db test-db ## Run the full test suite (spins up Postgres + test DB)
+	$(UV) run pytest -q
+
+.PHONY: test-quick
+test-quick: ## Run tests without touching infra (integration tests skip if DB is down)
 	$(UV) run pytest -q
 
 .PHONY: lint

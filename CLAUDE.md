@@ -61,9 +61,18 @@ internal moderation tooling.
 - `app/db/seed.py` — idempotent reference-data seeding (the `GameType` catalog). Run via
   `python -m app.db.seed` / `make seed` after migrating.
 - `app/api/v1/` — `router.py` aggregates endpoint routers under the `/api/v1` prefix (set in settings).
-  Add new resource routers there.
-- `app/services/` — business-logic layer (currently empty; put credit charging, match confirmation,
-  listing state transitions here rather than in endpoints).
+  Add new resource routers there. Endpoints stay thin; domain logic lives in `app/services/`.
+- `app/api/deps.py` — shared FastAPI dependencies. **`get_current_user` is the single auth seam.** It is
+  currently `get_current_user_stub` (trusts an `X-User-Id` header) so authorization logic can be built
+  without a Firebase project. `get_current_user_via_firebase` is written and ready; swap the alias at the
+  bottom of the file to go live — route signatures don't change.
+- `app/core/firebase.py` — lazy Firebase Admin init + `verify_id_token`. Phone/OTP happens on the mobile
+  client; the backend only verifies the ID token. Needs `FIREBASE_CREDENTIALS_PATH` (service-account JSON).
+- `app/schemas/` — Pydantic request/response models (`*Create`/`*Update`/`*Read`); `Read` models use
+  `ConfigDict(from_attributes=True)`.
+- `app/services/` — business-logic layer. `team_service.py` holds team/membership rules (captain
+  succession, admin delegation, leave/remove). Put credit charging, match confirmation, and listing
+  state transitions here too, not in endpoints.
 - `app/workers/` — `celery_app.py` (Celery instance + beat schedule) and `tasks.py`. The beat schedule
   runs `expire_stale_listings` every 10 min; expiring listings and the non-engagement credit refund are
   stubbed and need implementing against the four listing tables.
@@ -85,3 +94,14 @@ These are settled product decisions (see `../ANTIPAS/DATA_MODEL.md`) that aren't
 - **Feedback/Report/Dispute polymorphism**: `Feedback` and `Report` reference parties via a
   `(type, id)` pair (`PartyType` = user or team) rather than FKs, because a party can be either.
 - **Ad-hoc doubles pairs reuse `Team`** (`is_adhoc=True`, 2 members) rather than a new entity.
+- **Adding members is mutual-consent** via the `RosterApplication` invite/accept flow (a listings/search
+  milestone, not yet built). The team membership endpoints only manage *existing* memberships (roles,
+  transfer, leave, remove); creating a team makes the creator its captain.
+
+## Tests
+
+`tests/conftest.py` runs integration tests against a dedicated `antipas_test` Postgres DB (models use
+Postgres-only types, so SQLite isn't an option); it creates/drops the schema per test and **skips** if
+Postgres is unreachable, so `pytest` stays green offline. `make test` brings up Postgres, ensures the test
+DB exists, then runs the suite; `make test-quick` runs pytest alone. Tests use the stub auth via the
+`auth_header(user_id)` helper (sends `X-User-Id`).
