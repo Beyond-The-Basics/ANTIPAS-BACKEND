@@ -136,9 +136,7 @@ async def set_member_role(
     return target
 
 
-async def remove_member(
-    db: AsyncSession, team: Team, actor: User, target_user_id: uuid.UUID
-) -> None:
+async def remove_member(db: AsyncSession, team: Team, actor: User, target_user_id: uuid.UUID) -> None:
     actor_membership = await require_role(db, team.id, actor, CAPTAIN_OR_ADMIN)
     target = await get_active_membership(db, team.id, target_user_id)
     if target is None:
@@ -158,8 +156,6 @@ async def leave_team(db: AsyncSession, team: Team, user: User) -> None:
     if membership is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "You are not a member of this team")
     if membership.role == TeamRole.CAPTAIN:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT, "Captain must transfer the role before leaving"
-        )
+        raise HTTPException(status.HTTP_409_CONFLICT, "Captain must transfer the role before leaving")
     membership.status = MembershipStatus.LEFT
     await db.commit()

@@ -37,9 +37,7 @@ class RosterApplication(UUIDPKMixin, TimestampMixin, Base):
     )
     team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
-    direction: Mapped[ApplicationDirection] = mapped_column(
-        str_enum(ApplicationDirection, length=24)
-    )
+    direction: Mapped[ApplicationDirection] = mapped_column(str_enum(ApplicationDirection, length=24))
     status: Mapped[ApplicationStatus] = mapped_column(
         str_enum(ApplicationStatus, length=16), default=ApplicationStatus.PENDING
     )
@@ -100,9 +98,7 @@ class GuestApplication(UUIDPKMixin, TimestampMixin, Base):
     match_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("matches.id"), index=True)
     team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), index=True)
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
-    direction: Mapped[ApplicationDirection] = mapped_column(
-        str_enum(ApplicationDirection, length=24)
-    )
+    direction: Mapped[ApplicationDirection] = mapped_column(str_enum(ApplicationDirection, length=24))
     status: Mapped[ApplicationStatus] = mapped_column(
         str_enum(ApplicationStatus, length=16), default=ApplicationStatus.PENDING
     )

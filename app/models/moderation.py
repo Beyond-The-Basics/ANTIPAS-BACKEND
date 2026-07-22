@@ -19,6 +19,4 @@ class Report(UUIDPKMixin, TimestampMixin, Base):
     reported_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True))
     category: Mapped[str] = mapped_column(String(64))
     description: Mapped[str | None] = mapped_column(Text, default=None)
-    status: Mapped[ReportStatus] = mapped_column(
-        str_enum(ReportStatus, length=16), default=ReportStatus.OPEN
-    )
+    status: Mapped[ReportStatus] = mapped_column(str_enum(ReportStatus, length=16), default=ReportStatus.OPEN)

@@ -21,9 +21,7 @@ from app.core.config import settings
 @lru_cache
 def _get_app() -> firebase_admin.App:
     if not settings.firebase_credentials_path:
-        raise RuntimeError(
-            "FIREBASE_CREDENTIALS_PATH is not set; cannot initialize Firebase Admin SDK."
-        )
+        raise RuntimeError("FIREBASE_CREDENTIALS_PATH is not set; cannot initialize Firebase Admin SDK.")
     cred = credentials.Certificate(settings.firebase_credentials_path)
     return firebase_admin.initialize_app(cred)
 

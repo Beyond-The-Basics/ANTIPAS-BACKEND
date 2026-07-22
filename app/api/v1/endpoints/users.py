@@ -41,9 +41,7 @@ async def update_me(
     if data.name is not None:
         current_user.name = data.name
     if data.email is not None:
-        if await db.scalar(
-            select(User).where(User.email == data.email, User.id != current_user.id)
-        ):
+        if await db.scalar(select(User).where(User.email == data.email, User.id != current_user.id)):
             raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
         current_user.email = data.email
     await db.commit()
@@ -52,9 +50,7 @@ async def update_me(
 
 
 @router.get("", response_model=list[UserRead])
-async def list_users(
-    db: AsyncSession = Depends(get_db), limit: int = 50, offset: int = 0
-) -> list[User]:
+async def list_users(db: AsyncSession = Depends(get_db), limit: int = 50, offset: int = 0) -> list[User]:
     result = await db.scalars(select(User).limit(limit).offset(offset))
     return list(result)
 

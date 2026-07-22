@@ -18,9 +18,7 @@ from app.models.user import User
 
 
 async def get_current_user_stub(
-    x_user_id: uuid.UUID = Header(
-        ..., alias="X-User-Id", description="STUB AUTH: id of the acting user"
-    ),
+    x_user_id: uuid.UUID = Header(..., alias="X-User-Id", description="STUB AUTH: id of the acting user"),
     db: AsyncSession = Depends(get_db),
 ) -> User:
     user = await db.get(User, x_user_id)
