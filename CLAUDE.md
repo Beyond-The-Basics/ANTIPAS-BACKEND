@@ -1,0 +1,79 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+## What this is
+
+Backend for the **Kickoff App** — a sports matchmaking service (soccer/tennis/paddle) that pairs
+players and teams for games. The full product spec, data model, and tech-stack rationale live in the
+**sibling repo** `../ANTIPAS` (`SPEC.md`, `DATA_MODEL.md`, `TECH_STACK.md`). Treat those as the source of
+truth for domain decisions; this repo implements them.
+
+## Commands
+
+Uses `uv` for dependency/venv management. Prefix Python commands with `uv run`.
+
+```bash
+uv sync                       # install deps into .venv from uv.lock
+docker compose up -d postgres redis   # local Postgres + Redis (needed for the API/migrations/worker)
+uv run alembic upgrade head           # apply migrations
+uv run uvicorn app.main:app --reload  # run API at http://localhost:8000 (docs at /docs, admin at /admin)
+
+uv run pytest                 # run all tests
+uv run pytest tests/test_health.py::test_health   # run a single test
+uv run ruff check .           # lint
+uv run ruff check . --fix     # lint + autofix
+
+# Full stack (API + worker + beat + postgres + redis) in containers:
+docker compose up --build
+
+# Migrations
+uv run alembic revision --autogenerate -m "message"   # generate (requires a running Postgres)
+uv run alembic downgrade -1                            # roll back one
+
+# Celery (if not using docker compose)
+uv run celery -A app.workers.celery_app.celery_app worker --loglevel=info
+uv run celery -A app.workers.celery_app.celery_app beat --loglevel=info
+```
+
+## Architecture
+
+FastAPI + async SQLAlchemy 2.0 + PostgreSQL, with Celery/Redis for background jobs and SQLAdmin for
+internal moderation tooling.
+
+- `app/main.py` — FastAPI app factory; mounts the versioned API router and the SQLAdmin UI.
+- `app/core/config.py` — `Settings` (pydantic-settings), loaded from `.env`. Import the `settings`
+  singleton; don't read env vars directly.
+- `app/db/` — `base_class.py` defines the declarative `Base` plus `UUIDPKMixin`/`TimestampMixin`
+  (all tables use UUID PKs and a `created_at`). `session.py` holds the async engine + `get_db` FastAPI
+  dependency.
+- `app/models/` — SQLAlchemy models, one file per domain area. **All models must be imported in
+  `app/models/__init__.py`** — Alembic autogenerate and SQLAdmin both discover tables via
+  `Base.metadata`, so a model missing from that file silently won't get a migration. All status/enum
+  columns use `StrEnum`s from `app/models/enums.py` mapped with `Enum(..., native_enum=False)` (stored
+  as strings, no Postgres enum types).
+- `app/api/v1/` — `router.py` aggregates endpoint routers under the `/api/v1` prefix (set in settings).
+  Add new resource routers there.
+- `app/services/` — business-logic layer (currently empty; put credit charging, match confirmation,
+  listing state transitions here rather than in endpoints).
+- `app/workers/` — `celery_app.py` (Celery instance + beat schedule) and `tasks.py`. The beat schedule
+  runs `expire_stale_listings` every 10 min; expiring listings and the non-engagement credit refund are
+  stubbed and need implementing against the four listing tables.
+- `migrations/` — Alembic (async template). `env.py` pulls the DB URL from `settings` and imports
+  `app.models.Base` for autogenerate; `alembic.ini`'s `sqlalchemy.url` is intentionally blank.
+
+## Domain notes that affect the schema
+
+These are settled product decisions (see `../ANTIPAS/DATA_MODEL.md`) that aren't obvious from the code:
+
+- **Four separate listing tables, not one generic table**: `RosterSearch` (permanent recruiting,
+  stays open across multiple hires), `OpponentSearch` (team-vs-team, requires `team.completed`),
+  `GuestSearch` (one-off substitute, attached to a confirmed `Match`, free), `PlayerAvailability`
+  (individual broadcast, free). Kept distinct on purpose.
+- **Credits are personal, never team-pooled**: `CreditTransaction` always references a `User`.
+  Only `OpponentSearch`/`RosterSearch` are charged; `GuestSearch`/`PlayerAvailability` are free.
+- **Confirming one `OpponentApplication` creates a `Match`, auto-declines the rest, closes the search**
+  (one match per search).
+- **Feedback/Report/Dispute polymorphism**: `Feedback` and `Report` reference parties via a
+  `(type, id)` pair (`PartyType` = user or team) rather than FKs, because a party can be either.
+- **Ad-hoc doubles pairs reuse `Team`** (`is_adhoc=True`, 2 members) rather than a new entity.

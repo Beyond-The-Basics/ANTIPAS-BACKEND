@@ -1,0 +1,40 @@
+[project]
+name = "antipas-backend"
+version = "0.1.0"
+description = "Kickoff App backend — sports matchmaking API (FastAPI + async SQLAlchemy + Postgres)."
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.18.5",
+    "asyncpg>=0.31.0",
+    "celery[redis]>=5.6.3",
+    "fastapi>=0.139.2",
+    "firebase-admin>=7.5.0",
+    "pydantic-settings>=2.14.2",
+    "python-multipart>=0.0.32",
+    "redis>=6.4.0",
+    "sqladmin>=0.29.0",
+    "sqlalchemy[asyncio]>=2.0",
+    "uvicorn[standard]>=0.51.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.15.22",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"
+extend-exclude = ["migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+# B008: FastAPI's Depends()/Query() default-argument pattern is idiomatic, not a bug.
+ignore = ["B008"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
