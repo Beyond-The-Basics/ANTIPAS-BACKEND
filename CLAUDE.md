@@ -74,8 +74,9 @@ internal moderation tooling.
   `roster_service.py` (RosterSearch + RosterApplication invite/apply/accept → membership),
   `opponent_service.py` (OpponentSearch + OpponentApplication; confirming an application creates a
   `Match`, auto-declines the rest, and closes the search), `match_service.py` (match read/cancel/mark-
-  played), and `credit_service.py` (**stub** `charge_publish` — the real `CreditTransaction` ledger is
-  a later PR). Keep endpoints thin; new domain logic goes here.
+  played), `availability_service.py` (PlayerAvailability broadcast — free), and `credit_service.py`
+  (**stub** `charge_publish` — the real `CreditTransaction` ledger is a later PR). Keep endpoints thin;
+  new domain logic goes here.
 - `app/workers/` — `celery_app.py` (Celery instance + beat schedule) and `tasks.py`. The beat schedule
   runs `expire_stale_listings` every 10 min; expiring listings and the non-engagement credit refund are
   stubbed and need implementing against the four listing tables.
