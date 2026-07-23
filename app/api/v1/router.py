@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     availability,
+    guest,
     health,
     matches,
     opponent,
@@ -19,5 +20,6 @@ api_router.include_router(roster.router)
 api_router.include_router(opponent.router)
 api_router.include_router(matches.router)
 api_router.include_router(availability.router)
+api_router.include_router(guest.router)
 
-# Register future resource routers here (guest, feedback, credits, ...).
+# Register future resource routers here (feedback, credits, ...).
