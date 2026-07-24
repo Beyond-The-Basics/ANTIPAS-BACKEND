@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import MembershipStatus, Sport, TeamRole
+from app.models.game_type import GameType
 from app.models.team import DEFAULT_COUNTRY, Team, TeamMembership
 from app.models.user import User
 from app.schemas.team import TeamCreate, TeamUpdate
@@ -113,8 +114,39 @@ async def update_team(db: AsyncSession, team: Team, data: TeamUpdate, actor: Use
         team.country = data.country
     if data.city is not None:
         team.city = data.city
+
+    game_type_changed = False
+    if data.game_type_id is not None and data.game_type_id != team.game_type_id:
+        game_type = await db.get(GameType, data.game_type_id)
+        if game_type is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Game type not found")
+        if game_type.sport != team.sport:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Game type does not match the team's sport"
+            )
+        team.game_type_id = data.game_type_id
+        game_type_changed = True
+
     if data.completed is not None:
         team.completed = data.completed
+
+    # Whenever the team ends this call completed — either just now, or already completed with a
+    # lineup that just changed — the active roster must actually meet the lineup's minimum.
+    # Un-completing, or editing unrelated fields on an already-completed team, needs no check.
+    if team.completed and (data.completed is True or game_type_changed):
+        if team.game_type_id is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, "Pick a lineup type before marking the team completed"
+            )
+        game_type = await db.get(GameType, team.game_type_id)
+        active_count = len(await list_active_members(db, team.id))
+        if active_count < game_type.players_per_side:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"{game_type.label} needs at least {game_type.players_per_side} active members — "
+                f"team has {active_count}",
+            )
+
     await db.commit()
     await db.refresh(team)
     return team
@@ -149,6 +181,20 @@ async def set_member_role(
     if target.role == TeamRole.CAPTAIN:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Cannot change the captain's role directly")
     target.role = role
+    await db.commit()
+    await db.refresh(target)
+    return target
+
+
+async def set_jersey_number(
+    db: AsyncSession, team: Team, actor: User, target_user_id: uuid.UUID, jersey_number: int | None
+) -> TeamMembership:
+    # Unlike role changes, a captain/admin may set their own number — it carries no permissions.
+    await require_role(db, team.id, actor, CAPTAIN_OR_ADMIN)
+    target = await get_active_membership(db, team.id, target_user_id)
+    if target is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Member not found")
+    target.jersey_number = jersey_number
     await db.commit()
     await db.refresh(target)
     return target

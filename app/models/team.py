@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -26,6 +26,13 @@ class Team(UUIDPKMixin, TimestampMixin, Base):
     country: Mapped[str] = mapped_column(String(60), default=DEFAULT_COUNTRY)
     city: Mapped[str | None] = mapped_column(String(120), default=None)
     sport: Mapped[Sport] = mapped_column(str_enum(Sport))
+    # The lineup format (e.g. 7v7) the captain commits the roster to. Null until set at the
+    # roster-building stage — never at creation. Gates `completed` (team_service.update_team
+    # requires the active roster to reach `game_type.players_per_side`) and is inherited by any
+    # OpponentSearch this team publishes, rather than being chosen again at that point.
+    game_type_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("game_types.id"), default=None
+    )
     completed: Mapped[bool] = mapped_column(default=False)
     is_adhoc: Mapped[bool] = mapped_column(default=False)
 
@@ -42,6 +49,9 @@ class TeamMembership(UUIDPKMixin, Base):
     status: Mapped[MembershipStatus] = mapped_column(
         str_enum(MembershipStatus, length=16), default=MembershipStatus.ACTIVE
     )
+    # Captain/admin-assigned, shown on the lineup card. Not unique per team — two players briefly
+    # sharing a number while the captain reassigns one is a UX nuisance, not a data-integrity issue.
+    jersey_number: Mapped[int | None] = mapped_column(Integer, default=None)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     team: Mapped["Team"] = relationship(back_populates="memberships")

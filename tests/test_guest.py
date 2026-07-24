@@ -5,46 +5,23 @@ import uuid
 import pytest
 from sqlalchemy import func, select
 
-from app.models.game_type import GameType
 from app.models.team import TeamMembership
-from tests.conftest import auth_header, make_team, make_user
+from tests.conftest import auth_header, completed_team, make_user
 
 pytestmark = pytest.mark.asyncio
-
-
-async def a_game_type(db_session, sport="soccer") -> str:
-    gt = await db_session.scalar(select(GameType).where(GameType.sport == sport))
-    if gt is None:
-        gt = GameType(sport=sport, label="5v5")
-        db_session.add(gt)
-        await db_session.commit()
-        await db_session.refresh(gt)
-    return str(gt.id)
-
-
-async def completed_team(client, captain, name, sport="soccer") -> dict:
-    team = await make_team(client, captain["id"], name=name, sport=sport)
-    await client.patch(
-        f"/api/v1/teams/{team['id']}", json={"completed": True}, headers=auth_header(captain["id"])
-    )
-    return team
 
 
 async def a_confirmed_match(client, db_session, suffix: str):
     """Two completed teams run Flow 2 to a confirmed match. Returns (match, capA, capB, teamA, teamB)."""
     cap_a = await make_user(client, "CapA", f"+1666{suffix}00")
     cap_b = await make_user(client, "CapB", f"+1666{suffix}01")
-    home = await completed_team(client, cap_a, "Home")
-    away = await completed_team(client, cap_b, "Away")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
     search = (
         await client.post(
             f"/api/v1/teams/{home['id']}/opponent-searches",
-            json={
-                "game_type_id": await a_game_type(db_session),
-                "city": "Casablanca",
-                "pitch": "Stade X",
-                "date": "2026-09-01",
-            },
+            # No game_type_id — inherited from the (already-completed) publishing team.
+            json={"city": "Casablanca", "pitch": "Stade X", "date": "2026-09-01"},
             headers=auth_header(cap_a["id"]),
         )
     ).json()
@@ -78,7 +55,7 @@ async def publish_guest(client, match_id, team_id, actor_id):
 async def test_publish_requires_confirmed_match_and_team_in_it(client, db_session):
     match, cap_a, cap_b, home, away = await a_confirmed_match(client, db_session, "10")
     stranger_cap = await make_user(client, "SCap", "+16661010102")
-    outside_team = await completed_team(client, stranger_cap, "Outsiders")
+    outside_team = await completed_team(client, db_session, stranger_cap, "Outsiders")
 
     ok = await publish_guest(client, match["id"], home["id"], cap_a["id"])
     assert ok.status_code == 201, ok.text

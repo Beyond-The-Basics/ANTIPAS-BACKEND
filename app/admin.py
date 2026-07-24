@@ -36,6 +36,7 @@ class TeamAdmin(ModelView, model=Team):
         Team.sport,
         Team.country,
         Team.city,
+        Team.game_type_id,
         Team.completed,
         Team.is_adhoc,
     ]

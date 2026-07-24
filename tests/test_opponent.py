@@ -3,46 +3,18 @@
 import uuid
 
 import pytest
-from sqlalchemy import select
 
-from app.models.game_type import GameType
-from tests.conftest import auth_header, make_team, make_user
+from tests.conftest import auth_header, completed_team, make_team, make_user
 
 pytestmark = pytest.mark.asyncio
 
 
-async def a_game_type(db_session, sport: str = "soccer") -> str:
-    """Fetch a seeded-style GameType id, creating one if the test DB has none."""
-    gt = await db_session.scalar(select(GameType).where(GameType.sport == sport))
-    if gt is None:
-        gt = GameType(sport=sport, label="5v5" if sport == "soccer" else "singles")
-        db_session.add(gt)
-        await db_session.commit()
-        await db_session.refresh(gt)
-    return str(gt.id)
-
-
-async def completed_team(client, db_session, captain, name, sport="soccer") -> dict:
-    team = await make_team(client, captain["id"], name=name, sport=sport)
-    # mark completed (captain/admin only) — required to publish/respond in Flow 2
-    resp = await client.patch(
-        f"/api/v1/teams/{team['id']}",
-        json={"completed": True},
-        headers=auth_header(captain["id"]),
-    )
-    assert resp.status_code == 200 and resp.json()["completed"] is True
-    return team
-
-
-async def publish(client, db_session, team_id, captain_id, city="Casablanca", sport="soccer"):
+async def publish(client, db_session, team_id, captain_id, city="Casablanca"):
+    # No game_type_id — the search inherits it from the (already-completed, already-lineup-set)
+    # publishing team. See tests/test_team_profile.py for the game_type_id-at-team-level rules.
     resp = await client.post(
         f"/api/v1/teams/{team_id}/opponent-searches",
-        json={
-            "game_type_id": await a_game_type(db_session, sport),
-            "city": city,
-            "pitch": "Stade Municipal",
-            "date": "2026-09-01",
-        },
+        json={"city": city, "pitch": "Stade Municipal", "date": "2026-09-01"},
         headers=auth_header(captain_id),
     )
     return resp
@@ -53,33 +25,18 @@ async def publish(client, db_session, team_id, captain_id, city="Casablanca", sp
 
 async def test_publish_requires_completed_team(client, db_session):
     cap = await make_user(client, "Cap", "+15555554000")
-    team = await make_team(client, cap["id"])  # not completed
+    team = await make_team(client, cap["id"])  # not completed, no lineup set
     resp = await publish(client, db_session, team["id"], cap["id"])
     assert resp.status_code == 400
 
-    await client.patch(
-        f"/api/v1/teams/{team['id']}", json={"completed": True}, headers=auth_header(cap["id"])
-    )
+
+async def test_publish_inherits_teams_game_type(client, db_session):
+    cap = await make_user(client, "Cap", "+15555554001")
+    team = await completed_team(client, db_session, cap, "Kickers", sport="soccer")
     ok = await publish(client, db_session, team["id"], cap["id"])
     assert ok.status_code == 201
     assert ok.json()["status"] == "open" and ok.json()["sport"] == "soccer"
-
-
-async def test_publish_rejects_game_type_of_other_sport(client, db_session):
-    cap = await make_user(client, "Cap", "+15555554001")
-    team = await completed_team(client, db_session, cap, "Kickers", sport="soccer")
-    tennis_gt = await a_game_type(db_session, sport="tennis")
-    resp = await client.post(
-        f"/api/v1/teams/{team['id']}/opponent-searches",
-        json={
-            "game_type_id": tennis_gt,
-            "city": "Casablanca",
-            "pitch": "Court 1",
-            "date": "2026-09-01",
-        },
-        headers=auth_header(cap["id"]),
-    )
-    assert resp.status_code == 400
+    assert ok.json()["game_type_id"] == team["game_type_id"]
 
 
 async def test_publish_requires_manager(client, db_session):
@@ -97,8 +54,8 @@ async def test_browse_filters_by_sport(client, db_session):
     cap = await make_user(client, "Cap", "+15555554004")
     soccer = await completed_team(client, db_session, cap, "Kickers", sport="soccer")
     tennis = await completed_team(client, db_session, cap, "Racket", sport="tennis")
-    await publish(client, db_session, soccer["id"], cap["id"], sport="soccer")
-    await publish(client, db_session, tennis["id"], cap["id"], sport="tennis")
+    await publish(client, db_session, soccer["id"], cap["id"])
+    await publish(client, db_session, tennis["id"], cap["id"])
 
     resp = await client.get("/api/v1/opponent-searches", params={"sport": "soccer"})
     assert {s["team_id"] for s in resp.json()} == {soccer["id"]}

@@ -6,15 +6,18 @@ reachable, these fixtures skip rather than fail, so `pytest` stays green without
 """
 
 import os
+import uuid
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.session import get_db
 from app.main import app
 from app.models import Base
+from app.models.game_type import GameType
 
 TEST_DATABASE_URL = os.getenv(
     "TEST_DATABASE_URL",
@@ -94,3 +97,32 @@ async def add_member(db_session, team_id: str, user_id: str, role: str = "member
         )
     )
     await db_session.commit()
+
+
+async def a_game_type(db_session, sport: str = "soccer") -> GameType:
+    """Fetch a GameType for `sport`, creating a minimal one if the (per-test, empty) DB has none."""
+    gt = await db_session.scalar(select(GameType).where(GameType.sport == sport))
+    if gt is None:
+        by_sport = {"soccer": ("5v5", 5), "tennis": ("singles", 1), "paddle": ("doubles", 2)}
+        label, players_per_side = by_sport[sport]
+        gt = GameType(sport=sport, label=label, players_per_side=players_per_side)
+        db_session.add(gt)
+        await db_session.commit()
+        await db_session.refresh(gt)
+    return gt
+
+
+async def completed_team(client, db_session, captain: dict, name: str, sport: str = "soccer") -> dict:
+    """A team with a lineup type set and just enough active members to be marked completed."""
+    team = await make_team(client, captain["id"], name=name, sport=sport)
+    game_type = await a_game_type(db_session, sport)
+    for i in range(game_type.players_per_side - 1):  # captain is already one of them
+        member = await make_user(client, f"{name} P{i}", f"+1{uuid.uuid4().int % 10**11:011d}")
+        await add_member(db_session, team["id"], member["id"], role="member")
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}",
+        json={"game_type_id": str(game_type.id), "completed": True},
+        headers=auth_header(captain["id"]),
+    )
+    assert resp.status_code == 200 and resp.json()["completed"] is True, resp.text
+    return resp.json()

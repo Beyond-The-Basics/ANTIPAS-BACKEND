@@ -2,7 +2,7 @@
 
 import pytest
 
-from tests.conftest import auth_header, make_team, make_user
+from tests.conftest import a_game_type, add_member, auth_header, completed_team, make_team, make_user
 
 pytestmark = pytest.mark.asyncio
 
@@ -111,4 +111,205 @@ async def test_list_users_no_query_returns_unfiltered(client):
 
 async def test_list_users_search_below_min_length_rejected(client):
     resp = await client.get("/api/v1/users", params={"q": "a"})
+    assert resp.status_code == 422
+
+
+# --- lineup type (game_type_id) ------------------------------------------------
+
+
+async def test_set_lineup_type(client, db_session):
+    cap = await make_user(client, "Cap", "+15555553011")
+    team = await make_team(client, cap["id"], sport="soccer")
+    gt = await a_game_type(db_session, sport="soccer")
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}",
+        json={"game_type_id": str(gt.id)},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["game_type_id"] == str(gt.id)
+    # not completed yet — setting the lineup alone doesn't complete the team
+    assert resp.json()["completed"] is False
+
+
+async def test_lineup_type_must_match_team_sport(client, db_session):
+    cap = await make_user(client, "Cap", "+15555553012")
+    team = await make_team(client, cap["id"], sport="soccer")
+    tennis_gt = await a_game_type(db_session, sport="tennis")
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}",
+        json={"game_type_id": str(tennis_gt.id)},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 400
+
+
+async def test_lineup_type_unknown_id_404s(client):
+    import uuid
+
+    cap = await make_user(client, "Cap", "+15555553013")
+    team = await make_team(client, cap["id"])
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}",
+        json={"game_type_id": str(uuid.uuid4())},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 404
+
+
+# --- completion requires a full lineup -----------------------------------------
+
+
+async def test_cannot_complete_without_lineup_type(client):
+    cap = await make_user(client, "Cap", "+15555553014")
+    team = await make_team(client, cap["id"])
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}", json={"completed": True}, headers=auth_header(cap["id"])
+    )
+    assert resp.status_code == 400
+    assert "lineup" in resp.json()["detail"].lower()
+
+
+async def test_cannot_complete_with_lineup_but_short_roster(client, db_session):
+    cap = await make_user(client, "Cap", "+15555553015")
+    team = await make_team(client, cap["id"], sport="soccer")
+    gt = await a_game_type(db_session, sport="soccer")  # 5v5 -> needs 5 active members
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}",
+        json={"game_type_id": str(gt.id), "completed": True},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 400
+    assert "5" in resp.json()["detail"]
+
+
+async def test_completes_once_lineup_and_roster_both_satisfied(client, db_session):
+    cap = await make_user(client, "Cap", "+15555553016")
+    team = await make_team(client, cap["id"], sport="soccer")
+    gt = await a_game_type(db_session, sport="soccer")
+    for i in range(gt.players_per_side - 1):
+        member = await make_user(client, f"P{i}", f"+1555555400{i}")
+        await add_member(db_session, team["id"], member["id"])
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}",
+        json={"game_type_id": str(gt.id), "completed": True},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["completed"] is True
+
+
+async def test_uncompleting_never_needs_validation(client, db_session):
+    cap = await make_user(client, "Cap", "+15555553020")
+    team = await completed_team(client, db_session, cap, "Kickers")
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}", json={"completed": False}, headers=auth_header(cap["id"])
+    )
+    assert resp.status_code == 200 and resp.json()["completed"] is False
+
+
+async def test_editing_unrelated_field_on_completed_team_does_not_reverify(client, db_session):
+    cap = await make_user(client, "Cap", "+15555553021")
+    team = await completed_team(client, db_session, cap, "Kickers")
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}", json={"description": "New copy"}, headers=auth_header(cap["id"])
+    )
+    assert resp.status_code == 200 and resp.json()["completed"] is True
+
+
+async def test_changing_lineup_on_completed_team_reverifies_roster(client, db_session):
+    cap = await make_user(client, "Cap", "+15555553022")
+    team = await completed_team(client, db_session, cap, "Kickers", sport="soccer")  # 5v5, 5 members
+    eleven_a_side = await a_game_type(db_session, sport="soccer")
+    if eleven_a_side.label == "5v5":
+        # a_game_type always returns the first soccer row it finds; force an 11v11 via the DB.
+        from app.models.game_type import GameType
+
+        eleven_a_side = GameType(sport="soccer", label="11v11", players_per_side=11)
+        db_session.add(eleven_a_side)
+        await db_session.commit()
+        await db_session.refresh(eleven_a_side)
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}",
+        json={"game_type_id": str(eleven_a_side.id)},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 400
+    assert "11" in resp.json()["detail"]
+
+
+# --- opponent search inherits the team's lineup, not its own ------------------
+
+
+async def test_opponent_search_publish_ignores_stray_game_type_id_field(client, db_session):
+    """OpponentSearchCreate dropped game_type_id; an extra key in the body is just ignored."""
+    cap = await make_user(client, "Cap", "+15555553023")
+    team = await completed_team(client, db_session, cap, "Kickers", sport="soccer")
+    resp = await client.post(
+        f"/api/v1/teams/{team['id']}/opponent-searches",
+        json={
+            "game_type_id": "00000000-0000-0000-0000-000000000000",  # not a real schema field
+            "city": "Casablanca",
+            "pitch": "Stade Municipal",
+            "date": "2026-09-01",
+        },
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 201, resp.text
+    assert resp.json()["game_type_id"] == team["game_type_id"]
+
+
+# --- jersey numbers -------------------------------------------------------------
+
+
+async def test_captain_sets_jersey_number(client):
+    cap = await make_user(client, "Cap", "+15555553024")
+    team = await make_team(client, cap["id"])
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{cap['id']}/jersey-number",
+        json={"jersey_number": 10},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["jersey_number"] == 10
+
+
+async def test_jersey_number_can_be_cleared(client):
+    cap = await make_user(client, "Cap", "+15555553025")
+    team = await make_team(client, cap["id"])
+    await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{cap['id']}/jersey-number",
+        json={"jersey_number": 7},
+        headers=auth_header(cap["id"]),
+    )
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{cap['id']}/jersey-number",
+        json={"jersey_number": None},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["jersey_number"] is None
+
+
+async def test_jersey_number_requires_captain_or_admin(client):
+    cap = await make_user(client, "Cap", "+15555553026")
+    outsider = await make_user(client, "Out", "+15555553027")
+    team = await make_team(client, cap["id"])
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{cap['id']}/jersey-number",
+        json={"jersey_number": 9},
+        headers=auth_header(outsider["id"]),
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.parametrize("value", [-1, 100])
+async def test_jersey_number_out_of_range_rejected(client, value):
+    cap = await make_user(client, "Cap", "+15555553028")
+    team = await make_team(client, cap["id"])
+    resp = await client.patch(
+        f"/api/v1/teams/{team['id']}/members/{cap['id']}/jersey-number",
+        json={"jersey_number": value},
+        headers=auth_header(cap["id"]),
+    )
     assert resp.status_code == 422
