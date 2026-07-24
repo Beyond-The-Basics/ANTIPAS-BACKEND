@@ -1,6 +1,6 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -95,8 +95,17 @@ async def complete_onboarding(
 
 
 @router.get("", response_model=list[UserRead])
-async def list_users(db: AsyncSession = Depends(get_db), limit: int = 50, offset: int = 0) -> list[User]:
-    result = await db.scalars(select(User).limit(limit).offset(offset))
+async def list_users(
+    db: AsyncSession = Depends(get_db),
+    q: str | None = Query(default=None, min_length=2, description="Case-insensitive name search"),
+    limit: int = 50,
+    offset: int = 0,
+) -> list[User]:
+    """Directory listing, also the search a team captain uses to find someone to invite by name."""
+    stmt = select(User)
+    if q is not None:
+        stmt = stmt.where(User.name.ilike(f"%{q}%"))
+    result = await db.scalars(stmt.limit(limit).offset(offset))
     return list(result)
 
 

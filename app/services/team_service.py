@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.enums import MembershipStatus, Sport, TeamRole
-from app.models.team import Team, TeamMembership
+from app.models.team import DEFAULT_COUNTRY, Team, TeamMembership
 from app.models.user import User
 from app.schemas.team import TeamCreate, TeamUpdate
 
@@ -73,7 +73,19 @@ async def list_teams(db: AsyncSession, sport: Sport | None, limit: int, offset: 
 
 
 async def create_team(db: AsyncSession, data: TeamCreate, captain: User) -> Team:
-    team = Team(name=data.name, sport=data.sport, logo_url=data.logo_url, completed=False, is_adhoc=False)
+    team = Team(
+        name=data.name,
+        sport=data.sport,
+        description=data.description,
+        logo_url=data.logo_url,
+        # NULL would violate the NOT NULL column; resolve the default here rather than passing
+        # None through, since a constructor kwarg of None sets the attribute instead of leaving
+        # it unset (which is what would let the model's own column default apply).
+        country=data.country or DEFAULT_COUNTRY,
+        city=data.city,
+        completed=False,
+        is_adhoc=False,
+    )
     db.add(team)
     await db.flush()  # assign team.id before creating the membership
     db.add(
@@ -93,8 +105,14 @@ async def update_team(db: AsyncSession, team: Team, data: TeamUpdate, actor: Use
     await require_role(db, team.id, actor, CAPTAIN_OR_ADMIN)
     if data.name is not None:
         team.name = data.name
+    if data.description is not None:
+        team.description = data.description
     if data.logo_url is not None:
         team.logo_url = data.logo_url
+    if data.country is not None:
+        team.country = data.country
+    if data.city is not None:
+        team.city = data.city
     if data.completed is not None:
         team.completed = data.completed
     await db.commit()

@@ -12,12 +12,19 @@ from app.models.enums import MembershipStatus, Sport, TeamRole, str_enum
 if TYPE_CHECKING:
     from app.models.user import User
 
+# Matches app/models/user.py's DEFAULT_COUNTRY. Duplicated rather than imported — cross-model
+# imports for a literal aren't worth the coupling.
+DEFAULT_COUNTRY = "Morocco"
+
 
 class Team(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "teams"
 
     name: Mapped[str] = mapped_column(String(120))
+    description: Mapped[str | None] = mapped_column(String(500), default=None)
     logo_url: Mapped[str | None] = mapped_column(String(512), default=None)
+    country: Mapped[str] = mapped_column(String(60), default=DEFAULT_COUNTRY)
+    city: Mapped[str | None] = mapped_column(String(120), default=None)
     sport: Mapped[Sport] = mapped_column(str_enum(Sport))
     completed: Mapped[bool] = mapped_column(default=False)
     is_adhoc: Mapped[bool] = mapped_column(default=False)
