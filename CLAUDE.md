@@ -26,8 +26,8 @@ uv run uvicorn app.main:app --reload  # run API at http://localhost:8000 (docs a
 
 uv run pytest                 # run all tests
 uv run pytest tests/test_health.py::test_health   # run a single test
-uv run ruff check .           # lint
-uv run ruff check . --fix     # lint + autofix
+uv run ruff check ./app       # lint (app/ only — CI doesn't gate tests/ on lint/format)
+uv run ruff check . --fix     # lint + autofix (whole repo, including tests/)
 
 # Full stack (API + worker + beat + postgres + redis) in containers:
 docker compose up --build
