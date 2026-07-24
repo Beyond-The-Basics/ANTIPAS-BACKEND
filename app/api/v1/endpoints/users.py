@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_non_production
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserRead, UserUpdate
@@ -12,10 +12,16 @@ from app.schemas.user import UserCreate, UserRead, UserUpdate
 router = APIRouter()
 
 
-@router.post("", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=UserRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_non_production)],
+)
 async def create_user(data: UserCreate, db: AsyncSession = Depends(get_db)) -> User:
-    """Create a profile. In production this follows Firebase phone verification; the stub creates
-    it directly (phone_verified stays False until real verification is wired in)."""
+    """Create a profile with **no credential** — dev and test tooling only, hence the 404 in
+    production. `POST /auth/signup` is the real path; a user created here has a null
+    `password_hash` and cannot log in until one is set."""
     if await db.scalar(select(User).where(User.phone == data.phone)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Phone already registered")
     if data.email and await db.scalar(select(User).where(User.email == data.email)):
@@ -38,12 +44,51 @@ async def update_me(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> User:
+    """Partial update. Also used by the onboarding wizard to save each step as the user goes, so a
+    refresh mid-wizard doesn't lose progress — see `POST /users/me/onboarding/complete` for the
+    flag that marks the whole thing done."""
     if data.name is not None:
         current_user.name = data.name
     if data.email is not None:
         if await db.scalar(select(User).where(User.email == data.email, User.id != current_user.id)):
             raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
         current_user.email = data.email
+    if data.nickname is not None:
+        current_user.nickname = data.nickname
+    if data.age is not None:
+        current_user.age = data.age
+    if data.country is not None:
+        current_user.country = data.country
+    if data.city is not None:
+        current_user.city = data.city
+    if data.favorite_sports is not None:
+        current_user.favorite_sports = [s.value for s in data.favorite_sports]
+    if data.speed_rating is not None:
+        current_user.speed_rating = data.speed_rating
+    if data.strength_rating is not None:
+        current_user.strength_rating = data.strength_rating
+    if data.stamina_rating is not None:
+        current_user.stamina_rating = data.stamina_rating
+    if data.agility_rating is not None:
+        current_user.agility_rating = data.agility_rating
+    await db.commit()
+    await db.refresh(current_user)
+    return current_user
+
+
+@router.post("/me/onboarding/complete", response_model=UserRead)
+async def complete_onboarding(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> User:
+    """Mark the wizard done.
+
+    Deliberately permissive: it does not re-validate that every onboarding field is filled in.
+    The wizard's own "Finish" step enforces the required fields (nickname, age, city, at least one
+    favorite sport) before ever calling this; the athletic ratings are opt-in and can stay unset.
+    This just flips the flag the client uses to stop redirecting here.
+    """
+    current_user.onboarding_completed = True
     await db.commit()
     await db.refresh(current_user)
     return current_user
