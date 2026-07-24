@@ -133,8 +133,8 @@ test-quick: ## Run tests without touching infra (integration tests skip if DB is
 	$(UV) run pytest -q
 
 .PHONY: lint
-lint: ## Lint with ruff
-	$(UV) run ruff check .
+lint: ## Lint with ruff (app/ only, matching CI — see fmt to also cover tests/)
+	$(UV) run ruff check ./app
 
 .PHONY: fmt
 fmt: ## Auto-fix lint issues + format with ruff
