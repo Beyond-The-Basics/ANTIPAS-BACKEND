@@ -36,7 +36,7 @@ async def test_list_teams_filters_by_sport(client):
 
 async def test_create_team_requires_auth(client):
     resp = await client.post("/api/v1/teams", json={"name": "NoAuth", "sport": "soccer"})
-    assert resp.status_code == 422  # missing X-User-Id header
+    assert resp.status_code == 401  # no bearer token and no stub header
 
 
 # --- transfer-captain validation ---------------------------------------------

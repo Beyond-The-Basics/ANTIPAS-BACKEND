@@ -17,7 +17,7 @@ async def test_create_user_and_duplicate_phone(client):
 
 
 async def test_me_requires_auth_and_resolves(client):
-    assert (await client.get("/api/v1/users/me")).status_code == 422  # missing X-User-Id header
+    assert (await client.get("/api/v1/users/me")).status_code == 401  # no credentials at all
     user = await create_user(client, "Bob", "+15555550101")
     me = await client.get("/api/v1/users/me", headers=auth_header(user["id"]))
     assert me.status_code == 200

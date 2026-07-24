@@ -29,7 +29,7 @@ async def test_publish_sets_owner_and_open(client):
 
 async def test_publish_requires_auth(client):
     resp = await client.post("/api/v1/player-availability", json={"sport": "soccer", "city": "Rabat"})
-    assert resp.status_code == 422  # missing X-User-Id
+    assert resp.status_code == 401  # no bearer token and no stub header
 
 
 async def test_browse_filters_by_sport_and_city(client):
