@@ -121,9 +121,7 @@ async def update_team(db: AsyncSession, team: Team, data: TeamUpdate, actor: Use
         if game_type is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Game type not found")
         if game_type.sport != team.sport:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, "Game type does not match the team's sport"
-            )
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "Game type does not match the team's sport")
         team.game_type_id = data.game_type_id
         game_type_changed = True
 

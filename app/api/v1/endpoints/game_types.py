@@ -13,9 +13,7 @@ router = APIRouter()
 
 
 @router.get("", response_model=list[GameTypeRead])
-async def list_game_types(
-    sport: Sport | None = None, db: AsyncSession = Depends(get_db)
-) -> list[GameType]:
+async def list_game_types(sport: Sport | None = None, db: AsyncSession = Depends(get_db)) -> list[GameType]:
     """The lineup catalog a captain picks from at the roster-building stage."""
     stmt = select(GameType)
     if sport is not None:
