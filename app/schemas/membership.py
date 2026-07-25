@@ -1,9 +1,12 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from app.models.enums import MembershipStatus, TeamRole
+
+MIN_JERSEY_NUMBER = 0
+MAX_JERSEY_NUMBER = 99
 
 
 class MembershipRead(BaseModel):
@@ -14,7 +17,12 @@ class MembershipRead(BaseModel):
     user_id: uuid.UUID
     role: TeamRole
     status: MembershipStatus
+    jersey_number: int | None
     joined_at: datetime
+
+
+class JerseyNumberUpdate(BaseModel):
+    jersey_number: int | None = Field(default=None, ge=MIN_JERSEY_NUMBER, le=MAX_JERSEY_NUMBER)
 
 
 class RoleUpdate(BaseModel):

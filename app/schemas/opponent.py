@@ -7,7 +7,8 @@ from app.models.enums import ApplicationStatus, ListingStatus, Sport
 
 
 class OpponentSearchCreate(BaseModel):
-    game_type_id: uuid.UUID
+    # No game_type_id here — the search inherits the publishing team's own game_type_id (set at
+    # the roster-building stage, required for `team.completed`), rather than asking again.
     city: str
     pitch: str
     date: date

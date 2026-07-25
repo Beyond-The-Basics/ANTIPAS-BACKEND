@@ -17,7 +17,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.models.enums import ApplicationStatus, ListingStatus, MatchStatus, SearchType, Sport
-from app.models.game_type import GameType
 from app.models.match import Match
 from app.models.search import OpponentApplication, OpponentSearch
 from app.models.team import Team
@@ -44,16 +43,16 @@ async def publish_opponent_search(
             status.HTTP_400_BAD_REQUEST,
             "Team must be marked completed before searching for an opponent",
         )
-    game_type = await db.get(GameType, data.game_type_id)
-    if game_type is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "Game type not found")
-    if game_type.sport != team.sport:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Game type does not match the team's sport")
+    # A completed team always has a game_type_id — team_service.update_team enforces that on the
+    # transition into completed — so the search just inherits it instead of asking again. This
+    # check only guards against a team that reached completed=True before this rule existed.
+    if team.game_type_id is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "Team has no lineup type set")
 
     search = OpponentSearch(
         team_id=team.id,
         sport=team.sport,
-        game_type_id=game_type.id,
+        game_type_id=team.game_type_id,
         city=data.city,
         pitch=data.pitch,
         date=data.date,

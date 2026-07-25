@@ -47,12 +47,14 @@ async def test_update_team_requires_membership(client):
     outsider = await create_user(client, "Nosy", "+15555550105")
     team = await create_team(client, captain["id"])
 
+    # `completed` deliberately not used here — it needs a lineup type and a full roster (see
+    # tests/test_team_profile.py); this test is only about who's allowed to PATCH at all.
     ok = await client.patch(
         f"/api/v1/teams/{team['id']}",
-        json={"completed": True},
+        json={"description": "Ready to play"},
         headers=auth_header(captain["id"]),
     )
-    assert ok.status_code == 200 and ok.json()["completed"] is True
+    assert ok.status_code == 200 and ok.json()["description"] == "Ready to play"
 
     forbidden = await client.patch(
         f"/api/v1/teams/{team['id']}",

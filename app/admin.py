@@ -30,7 +30,16 @@ class UserAdmin(ModelView, model=User):
 
 
 class TeamAdmin(ModelView, model=Team):
-    column_list = [Team.id, Team.name, Team.sport, Team.completed, Team.is_adhoc]
+    column_list = [
+        Team.id,
+        Team.name,
+        Team.sport,
+        Team.country,
+        Team.city,
+        Team.game_type_id,
+        Team.completed,
+        Team.is_adhoc,
+    ]
 
 
 class TeamMembershipAdmin(ModelView, model=TeamMembership):
