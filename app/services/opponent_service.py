@@ -259,9 +259,7 @@ async def post_message(
 ) -> NegotiationMessage:
     search = await get_search_or_404(db, application.opponent_search_id)
     await _actor_team_in_negotiation(db, search, application, actor)
-    message = NegotiationMessage(
-        opponent_application_id=application.id, sender_user_id=actor.id, body=body
-    )
+    message = NegotiationMessage(opponent_application_id=application.id, sender_user_id=actor.id, body=body)
     db.add(message)
     await db.commit()
     await db.refresh(message)

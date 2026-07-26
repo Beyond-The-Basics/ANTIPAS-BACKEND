@@ -147,16 +147,12 @@ async def propose_terms(
     db: AsyncSession = Depends(get_db),
 ):
     application = await opponent_service.get_application_or_404(db, application_id)
-    application = await opponent_service.propose_terms(
-        db, application, current_user, data.date, data.pitch
-    )
+    application = await opponent_service.propose_terms(db, application, current_user, data.date, data.pitch)
     await hub.broadcast(
         str(application_id),
         {
             "type": "proposal",
-            "proposed_date": application.proposed_date.isoformat()
-            if application.proposed_date
-            else None,
+            "proposed_date": application.proposed_date.isoformat() if application.proposed_date else None,
             "proposed_pitch": application.proposed_pitch,
             "proposed_by_team_id": str(application.proposed_by_team_id)
             if application.proposed_by_team_id
