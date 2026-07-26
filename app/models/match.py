@@ -1,7 +1,7 @@
 import uuid
-from datetime import date
+from datetime import datetime
 
-from sqlalchemy import Date, ForeignKey, String
+from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,7 +21,7 @@ class Match(UUIDPKMixin, TimestampMixin, Base):
     game_type_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("game_types.id"))
     city: Mapped[str] = mapped_column(String(120))
     pitch: Mapped[str] = mapped_column(String(255))
-    date: Mapped[date] = mapped_column(Date)
+    date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     status: Mapped[MatchStatus] = mapped_column(
         str_enum(MatchStatus, length=24), default=MatchStatus.CONFIRMED
     )

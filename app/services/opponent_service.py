@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.enums import ApplicationStatus, ListingStatus, MatchStatus, SearchType, Sport
 from app.models.match import Match
-from app.models.search import OpponentApplication, OpponentSearch
+from app.models.search import NegotiationMessage, OpponentApplication, OpponentSearch
 from app.models.team import Team
 from app.models.user import User
 from app.schemas.opponent import OpponentSearchCreate
@@ -54,6 +54,7 @@ async def publish_opponent_search(
         sport=team.sport,
         game_type_id=team.game_type_id,
         city=data.city,
+        country=data.country or team.country,
         pitch=data.pitch,
         date=data.date,
         status=ListingStatus.OPEN,
@@ -140,14 +141,80 @@ async def withdraw_application(db: AsyncSession, application: OpponentApplicatio
     await db.commit()
 
 
-async def confirm_application(db: AsyncSession, application: OpponentApplication, actor: User) -> Match:
+async def accept_challenge(
+    db: AsyncSession, application: OpponentApplication, actor: User
+) -> OpponentApplication:
+    """The publishing team's captain/admin accepts a pending challenge — this opens the negotiation
+    (chat) rather than immediately creating the match. The search's own terms seed the first
+    proposal. Only one challenge may be in negotiation at a time."""
     if application.status != ApplicationStatus.PENDING:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Application is not pending")
     search = await get_search_or_404(db, application.opponent_search_id)
     if search.status != ListingStatus.OPEN:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "Search is no longer open")
-    # only the publishing team's captain/admin confirms
     await team_service.require_role(db, search.team_id, actor, team_service.CAPTAIN_OR_ADMIN)
+
+    already = await db.scalar(
+        select(OpponentApplication).where(
+            OpponentApplication.opponent_search_id == search.id,
+            OpponentApplication.status == ApplicationStatus.ACCEPTED,
+        )
+    )
+    if already is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, "Another challenge is already being negotiated for this search"
+        )
+
+    application.status = ApplicationStatus.ACCEPTED
+    application.proposed_date = search.date
+    application.proposed_pitch = search.pitch
+    application.proposed_by_team_id = search.team_id
+    await db.commit()
+    await db.refresh(application)
+    return application
+
+
+async def _actor_team_in_negotiation(
+    db: AsyncSession, search: OpponentSearch, application: OpponentApplication, actor: User
+) -> uuid.UUID:
+    """The negotiating team the actor manages (captain/admin), or 403."""
+    for team_id in (search.team_id, application.responding_team_id):
+        membership = await team_service.get_active_membership(db, team_id, actor.id)
+        if membership is not None and membership.role in team_service.CAPTAIN_OR_ADMIN:
+            return team_id
+    raise HTTPException(
+        status.HTTP_403_FORBIDDEN, "Only the two teams' captains or admins can negotiate this match"
+    )
+
+
+async def propose_terms(
+    db: AsyncSession, application: OpponentApplication, actor: User, date, pitch: str
+) -> OpponentApplication:
+    if application.status != ApplicationStatus.ACCEPTED:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This challenge is not under negotiation")
+    search = await get_search_or_404(db, application.opponent_search_id)
+    actor_team = await _actor_team_in_negotiation(db, search, application, actor)
+    application.proposed_date = date
+    application.proposed_pitch = pitch
+    application.proposed_by_team_id = actor_team
+    await db.commit()
+    await db.refresh(application)
+    return application
+
+
+async def agree(db: AsyncSession, application: OpponentApplication, actor: User) -> Match:
+    """The captain/admin of the team that did NOT make the current proposal agrees to it — the
+    match is created with the negotiated terms and the search closes."""
+    if application.status != ApplicationStatus.ACCEPTED:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This challenge is not under negotiation")
+    if application.proposed_date is None or application.proposed_pitch is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No terms have been proposed yet")
+    search = await get_search_or_404(db, application.opponent_search_id)
+    actor_team = await _actor_team_in_negotiation(db, search, application, actor)
+    if actor_team == application.proposed_by_team_id:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "The other team must agree to your proposal, not you"
+        )
 
     match = Match(
         opponent_search_id=search.id,
@@ -156,8 +223,8 @@ async def confirm_application(db: AsyncSession, application: OpponentApplication
         sport=search.sport,
         game_type_id=search.game_type_id,
         city=search.city,
-        pitch=search.pitch,
-        date=search.date,
+        pitch=application.proposed_pitch,
+        date=application.proposed_date,
         status=MatchStatus.CONFIRMED,
     )
     db.add(match)
@@ -177,6 +244,41 @@ async def confirm_application(db: AsyncSession, application: OpponentApplication
     await db.commit()
     await db.refresh(match)
     return match
+
+
+async def authorize_negotiation_member(
+    db: AsyncSession, application: OpponentApplication, actor: User
+) -> uuid.UUID:
+    """Public wrapper for the WebSocket handler: 403s unless the actor manages one of the teams."""
+    search = await get_search_or_404(db, application.opponent_search_id)
+    return await _actor_team_in_negotiation(db, search, application, actor)
+
+
+async def post_message(
+    db: AsyncSession, application: OpponentApplication, actor: User, body: str
+) -> NegotiationMessage:
+    search = await get_search_or_404(db, application.opponent_search_id)
+    await _actor_team_in_negotiation(db, search, application, actor)
+    message = NegotiationMessage(
+        opponent_application_id=application.id, sender_user_id=actor.id, body=body
+    )
+    db.add(message)
+    await db.commit()
+    await db.refresh(message)
+    return message
+
+
+async def list_messages(
+    db: AsyncSession, application: OpponentApplication, actor: User
+) -> list[NegotiationMessage]:
+    search = await get_search_or_404(db, application.opponent_search_id)
+    await _actor_team_in_negotiation(db, search, application, actor)
+    result = await db.scalars(
+        select(NegotiationMessage)
+        .where(NegotiationMessage.opponent_application_id == application.id)
+        .order_by(NegotiationMessage.created_at)
+    )
+    return list(result)
 
 
 async def list_search_applications(

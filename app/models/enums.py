@@ -46,6 +46,9 @@ class ApplicationDirection(enum.StrEnum):
 
 class ApplicationStatus(enum.StrEnum):
     PENDING = "pending"
+    # An opponent challenge the publisher accepted: the two teams are now negotiating date/time/
+    # pitch in chat. Becomes CONFIRMED when they agree and a Match is created.
+    ACCEPTED = "accepted"
     CONFIRMED = "confirmed"
     DECLINED = "declined"
     WITHDRAWN = "withdrawn"
