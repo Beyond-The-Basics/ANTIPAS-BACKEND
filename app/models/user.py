@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING
 
-from sqlalchemy import ARRAY, Integer, String
+from sqlalchemy import ARRAY, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base, TimestampMixin, UUIDPKMixin
@@ -45,5 +45,11 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     agility_rating: Mapped[int | None] = mapped_column(Integer, default=None)
     # Set once by the completion endpoint; gates the client's post-login redirect to the wizard.
     onboarding_completed: Mapped[bool] = mapped_column(default=False)
+
+    # Saved discoverability location — set the first time a player publishes a PlayerAvailability
+    # (or edited directly on the profile) and reused as the default on future broadcasts.
+    latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    radius_km: Mapped[float | None] = mapped_column(Float, default=None)
 
     memberships: Mapped[list["TeamMembership"]] = relationship(back_populates="user")

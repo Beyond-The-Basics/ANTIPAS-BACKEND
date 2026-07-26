@@ -9,10 +9,28 @@ from tests.conftest import auth_header, make_user
 pytestmark = pytest.mark.asyncio
 
 
-async def publish(client, user_id, sport="soccer", city="Casablanca"):
+async def publish(
+    client,
+    user_id,
+    sport="soccer",
+    city="Casablanca",
+    country="Morocco",
+    region=None,
+    latitude=33.5731,
+    longitude=-7.5898,
+    radius_km=10,
+):
     return await client.post(
         "/api/v1/player-availability",
-        json={"sport": sport, "city": city},
+        json={
+            "sport": sport,
+            "city": city,
+            "country": country,
+            "region": region,
+            "latitude": latitude,
+            "longitude": longitude,
+            "radius_km": radius_km,
+        },
         headers=auth_header(user_id),
     )
 
@@ -25,10 +43,15 @@ async def test_publish_sets_owner_and_open(client):
     assert body["user_id"] == user["id"]
     assert body["status"] == "open"
     assert body["sport"] == "soccer"
+    assert body["city"] == "Casablanca"
+    assert body["country"] == "Morocco"
 
 
 async def test_publish_requires_auth(client):
-    resp = await client.post("/api/v1/player-availability", json={"sport": "soccer", "city": "Rabat"})
+    resp = await client.post(
+        "/api/v1/player-availability",
+        json={"sport": "soccer", "city": "Rabat", "latitude": 34.02, "longitude": -6.83, "radius_km": 10},
+    )
     assert resp.status_code == 401  # no bearer token and no stub header
 
 
@@ -43,6 +66,16 @@ async def test_browse_filters_by_sport_and_city(client):
 
     by_city = await client.get("/api/v1/player-availability", params={"city": "Casablanca"})
     assert {r["user_id"] for r in by_city.json()} == {a["id"]}
+
+
+async def test_browse_filters_by_country(client):
+    a = await make_user(client, "A", "+15555556100")
+    b = await make_user(client, "B", "+15555556101")
+    await publish(client, a["id"], city="Casablanca", country="Morocco")
+    await publish(client, b["id"], city="Paris", country="France", latitude=48.8566, longitude=2.3522)
+
+    by_country = await client.get("/api/v1/player-availability", params={"country": "France"})
+    assert {r["user_id"] for r in by_country.json()} == {b["id"]}
 
 
 async def test_withdraw_owner_only(client):
@@ -98,3 +131,82 @@ async def test_list_mine(client):
 async def test_get_availability_404(client):
     resp = await client.get(f"/api/v1/player-availability/{uuid.uuid4()}")
     assert resp.status_code == 404
+
+
+async def test_publish_saves_location_to_profile(client):
+    user = await make_user(client, "Saver", "+15555556011")
+    await publish(client, user["id"], latitude=33.5731, longitude=-7.5898, radius_km=12)
+
+    me = await client.get("/api/v1/users/me", headers=auth_header(user["id"]))
+    assert me.json()["latitude"] == 33.5731
+    assert me.json()["longitude"] == -7.5898
+    assert me.json()["radius_km"] == 12
+
+
+async def test_publish_falls_back_to_profile_location(client):
+    user = await make_user(client, "Reuser", "+15555556012")
+    await client.patch(
+        "/api/v1/users/me",
+        json={"latitude": 34.02, "longitude": -6.83, "radius_km": 20},
+        headers=auth_header(user["id"]),
+    )
+
+    resp = await client.post(
+        "/api/v1/player-availability",
+        json={"sport": "soccer", "city": "Rabat"},
+        headers=auth_header(user["id"]),
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["latitude"] == 34.02
+    assert body["longitude"] == -6.83
+    assert body["radius_km"] == 20
+
+
+async def test_publish_without_location_or_profile_default_fails(client):
+    user = await make_user(client, "Blank", "+15555556013")
+    resp = await client.post(
+        "/api/v1/player-availability",
+        json={"sport": "soccer", "city": "Rabat"},
+        headers=auth_header(user["id"]),
+    )
+    assert resp.status_code == 400
+
+
+async def test_browse_filters_by_player_radius(client):
+    # Casablanca center
+    near = await make_user(client, "Near", "+15555556008")
+    # ~1.5km away, well within a 10km player radius
+    await publish(client, near["id"], latitude=33.5731, longitude=-7.5898, radius_km=10)
+    # ~9,000km away (New York), well outside any reasonable radius
+    far = await make_user(client, "Far", "+15555556009")
+    await publish(client, far["id"], latitude=40.7128, longitude=-74.0060, radius_km=10)
+
+    resp = await client.get(
+        "/api/v1/player-availability",
+        params={"search_lat": 33.5850, "search_lng": -7.6000},
+    )
+    assert resp.status_code == 200
+    ids = {r["user_id"] for r in resp.json()}
+    assert near["id"] in ids
+    assert far["id"] not in ids
+
+
+async def test_browse_respects_mutual_search_radius(client):
+    owner = await make_user(client, "Owner", "+15555556010")
+    # Player's own radius is generous (50km), but the searcher scopes to 1km.
+    await publish(client, owner["id"], latitude=33.5731, longitude=-7.5898, radius_km=50)
+
+    # ~9km away from the player's location — outside the searcher's 1km search radius.
+    resp = await client.get(
+        "/api/v1/player-availability",
+        params={"search_lat": 33.65, "search_lng": -7.5898, "search_radius_km": 1},
+    )
+    assert resp.status_code == 200
+    assert owner["id"] not in {r["user_id"] for r in resp.json()}
+
+    resp_wide = await client.get(
+        "/api/v1/player-availability",
+        params={"search_lat": 33.65, "search_lng": -7.5898, "search_radius_km": 50},
+    )
+    assert owner["id"] in {r["user_id"] for r in resp_wide.json()}

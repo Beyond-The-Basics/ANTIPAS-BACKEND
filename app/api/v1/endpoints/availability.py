@@ -23,18 +23,34 @@ async def publish_availability(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await availability_service.publish(db, current_user, data.sport, data.city)
+    return await availability_service.publish(
+        db,
+        current_user,
+        data.sport,
+        data.city,
+        data.latitude,
+        data.longitude,
+        data.radius_km,
+        data.country,
+        data.region,
+    )
 
 
 @router.get("/player-availability", response_model=list[PlayerAvailabilityRead])
 async def browse_availability(
     sport: Sport | None = None,
     city: str | None = None,
+    country: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    search_lat: float | None = None,
+    search_lng: float | None = None,
+    search_radius_km: float | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    return await availability_service.list_availabilities(db, sport, city, limit, offset)
+    return await availability_service.list_availabilities(
+        db, sport, city, limit, offset, country, search_lat, search_lng, search_radius_km
+    )
 
 
 @router.get("/users/me/availability", response_model=list[PlayerAvailabilityRead])
