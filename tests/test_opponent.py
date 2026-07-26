@@ -14,7 +14,7 @@ async def publish(client, db_session, team_id, captain_id, city="Casablanca"):
     # publishing team. See tests/test_team_profile.py for the game_type_id-at-team-level rules.
     resp = await client.post(
         f"/api/v1/teams/{team_id}/opponent-searches",
-        json={"city": city, "pitch": "Stade Municipal", "date": "2026-09-01"},
+        json={"city": city, "pitch": "Stade Municipal", "date": "2026-09-01T18:00:00"},
         headers=auth_header(captain_id),
     )
     return resp
@@ -113,10 +113,20 @@ async def test_apply_requires_manager_of_responding_team(client, db_session):
     assert resp.status_code == 403
 
 
-# --- confirm -> Match ---------------------------------------------------------
+# --- negotiation: accept -> propose -> agree -> Match -------------------------
 
 
-async def test_confirm_creates_match_and_auto_declines(client, db_session):
+async def _apply(client, search_id, team_id, cap_id):
+    return (
+        await client.post(
+            f"/api/v1/opponent-searches/{search_id}/applications",
+            json={"responding_team_id": team_id},
+            headers=auth_header(cap_id),
+        )
+    ).json()
+
+
+async def test_accept_then_agree_creates_match_and_auto_declines(client, db_session):
     cap_a = await make_user(client, "CapA", "+15555554010")
     cap_b = await make_user(client, "CapB", "+15555554011")
     cap_c = await make_user(client, "CapC", "+15555554012")
@@ -125,75 +135,138 @@ async def test_confirm_creates_match_and_auto_declines(client, db_session):
     other = await completed_team(client, db_session, cap_c, "Other")
     search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
 
-    app_b = (
-        await client.post(
-            f"/api/v1/opponent-searches/{search['id']}/applications",
-            json={"responding_team_id": away["id"]},
-            headers=auth_header(cap_b["id"]),
-        )
-    ).json()
-    app_c = (
-        await client.post(
-            f"/api/v1/opponent-searches/{search['id']}/applications",
-            json={"responding_team_id": other["id"]},
-            headers=auth_header(cap_c["id"]),
-        )
-    ).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    app_c = await _apply(client, search["id"], other["id"], cap_c["id"])
 
-    # only the publisher confirms
+    # only the publisher accepts the challenge
     denied = await client.post(
-        f"/api/v1/opponent-applications/{app_b['id']}/confirm",
-        headers=auth_header(cap_b["id"]),
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_b["id"])
     )
     assert denied.status_code == 403
 
-    confirmed = await client.post(
-        f"/api/v1/opponent-applications/{app_b['id']}/confirm",
-        headers=auth_header(cap_a["id"]),
+    accepted = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
     )
-    assert confirmed.status_code == 200
-    match = confirmed.json()
+    assert accepted.status_code == 200
+    assert accepted.json()["status"] == "accepted"
+    # the search's terms seed the first proposal, made by the home (publishing) team
+    assert accepted.json()["proposed_by_team_id"] == home["id"]
+
+    # the proposer can't agree to their own proposal — the other team must
+    self_agree = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/agree", headers=auth_header(cap_a["id"])
+    )
+    assert self_agree.status_code == 400
+
+    agreed = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/agree", headers=auth_header(cap_b["id"])
+    )
+    assert agreed.status_code == 200
+    match = agreed.json()
     assert match["team_a_id"] == home["id"] and match["team_b_id"] == away["id"]
     assert match["status"] == "confirmed"
 
-    # search closed; other application auto-declined
+    # search closed; the other pending application auto-declined
     search_now = await client.get(f"/api/v1/opponent-searches/{search['id']}")
     assert search_now.json()["status"] == "confirmed"
-
     apps = await client.get(
-        f"/api/v1/opponent-searches/{search['id']}/applications",
-        headers=auth_header(cap_a["id"]),
+        f"/api/v1/opponent-searches/{search['id']}/applications", headers=auth_header(cap_a["id"])
     )
     statuses = {a["id"]: a["status"] for a in apps.json()}
     assert statuses[app_b["id"]] == "confirmed"
     assert statuses[app_c["id"]] == "declined"
 
-    # search shows in both teams' matches
     home_matches = await client.get(f"/api/v1/teams/{home['id']}/matches")
     away_matches = await client.get(f"/api/v1/teams/{away['id']}/matches")
     assert match["id"] in {m["id"] for m in home_matches.json()}
     assert match["id"] in {m["id"] for m in away_matches.json()}
 
 
-async def test_cannot_confirm_twice(client, db_session):
+async def test_propose_flips_who_must_agree_and_sets_match_terms(client, db_session):
+    cap_a = await make_user(client, "CapA", "+15555554020")
+    cap_b = await make_user(client, "CapB", "+15555554021")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
+    search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+
+    # away counter-proposes new terms — now home must be the one to agree
+    prop = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/propose",
+        json={"date": "2026-09-05T20:30:00", "pitch": "Complexe Sportif"},
+        headers=auth_header(cap_b["id"]),
+    )
+    assert prop.status_code == 200 and prop.json()["proposed_by_team_id"] == away["id"]
+
+    # away (proposer) can't agree now
+    assert (
+        await client.post(
+            f"/api/v1/opponent-applications/{app_b['id']}/agree", headers=auth_header(cap_b["id"])
+        )
+    ).status_code == 400
+
+    match = (
+        await client.post(
+            f"/api/v1/opponent-applications/{app_b['id']}/agree", headers=auth_header(cap_a["id"])
+        )
+    ).json()
+    # The negotiated terms flow into the match (the exact time is normalized to UTC on storage;
+    # the client renders it back in local time).
+    assert match["pitch"] == "Complexe Sportif"
+    assert match["date"].startswith("2026-09-05")
+
+
+async def test_only_negotiating_teams_can_message(client, db_session):
+    cap_a = await make_user(client, "CapA", "+15555554030")
+    cap_b = await make_user(client, "CapB", "+15555554031")
+    stranger = await make_user(client, "Str", "+15555554032")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
+    search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+
+    sent = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/messages",
+        json={"body": "Can we push to 20:30?"},
+        headers=auth_header(cap_b["id"]),
+    )
+    assert sent.status_code == 201
+
+    blocked = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/messages",
+        json={"body": "hi"},
+        headers=auth_header(stranger["id"]),
+    )
+    assert blocked.status_code == 403
+
+    listed = await client.get(
+        f"/api/v1/opponent-applications/{app_b['id']}/messages", headers=auth_header(cap_a["id"])
+    )
+    assert [m["body"] for m in listed.json()] == ["Can we push to 20:30?"]
+
+
+async def test_cannot_agree_twice(client, db_session):
     cap_a = await make_user(client, "CapA", "+15555554013")
     cap_b = await make_user(client, "CapB", "+15555554014")
     home = await completed_team(client, db_session, cap_a, "Home")
     away = await completed_team(client, db_session, cap_b, "Away")
     search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
-    app_b = (
-        await client.post(
-            f"/api/v1/opponent-searches/{search['id']}/applications",
-            json={"responding_team_id": away["id"]},
-            headers=auth_header(cap_b["id"]),
-        )
-    ).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
     first = await client.post(
-        f"/api/v1/opponent-applications/{app_b['id']}/confirm", headers=auth_header(cap_a["id"])
+        f"/api/v1/opponent-applications/{app_b['id']}/agree", headers=auth_header(cap_b["id"])
     )
     assert first.status_code == 200
     second = await client.post(
-        f"/api/v1/opponent-applications/{app_b['id']}/confirm", headers=auth_header(cap_a["id"])
+        f"/api/v1/opponent-applications/{app_b['id']}/agree", headers=auth_header(cap_b["id"])
     )
     assert second.status_code == 400
 
@@ -207,17 +280,14 @@ async def confirmed_match(client, db_session, suffix: str) -> tuple[dict, dict, 
     home = await completed_team(client, db_session, cap_a, "Home")
     away = await completed_team(client, db_session, cap_b, "Away")
     search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
-    app_b = (
-        await client.post(
-            f"/api/v1/opponent-searches/{search['id']}/applications",
-            json={"responding_team_id": away["id"]},
-            headers=auth_header(cap_b["id"]),
-        )
-    ).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+    # home's terms seed the proposal, so the away captain agrees to finalize.
     match = (
         await client.post(
-            f"/api/v1/opponent-applications/{app_b['id']}/confirm",
-            headers=auth_header(cap_a["id"]),
+            f"/api/v1/opponent-applications/{app_b['id']}/agree", headers=auth_header(cap_b["id"])
         )
     ).json()
     return match, cap_a, cap_b
