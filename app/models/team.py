@@ -52,6 +52,10 @@ class TeamMembership(UUIDPKMixin, Base):
     # Captain/admin-assigned, shown on the lineup card. Not unique per team — two players briefly
     # sharing a number while the captain reassigns one is a UX nuisance, not a data-integrity issue.
     jersey_number: Mapped[int | None] = mapped_column(Integer, default=None)
+    # Slot index on the lineup pitch (0-based), set by the captain arranging the formation. Null =
+    # not placed (bench/sub, or the captain hasn't arranged the lineup yet — the client then
+    # auto-fills slots by join order). Not unique per team; the captain owns keeping it coherent.
+    lineup_position: Mapped[int | None] = mapped_column(Integer, default=None)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     team: Mapped["Team"] = relationship(back_populates="memberships")

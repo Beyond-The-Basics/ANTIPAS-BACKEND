@@ -71,6 +71,12 @@ async def update_me(
         current_user.stamina_rating = data.stamina_rating
     if data.agility_rating is not None:
         current_user.agility_rating = data.agility_rating
+    if data.latitude is not None:
+        current_user.latitude = data.latitude
+    if data.longitude is not None:
+        current_user.longitude = data.longitude
+    if data.radius_km is not None:
+        current_user.radius_km = data.radius_km
     await db.commit()
     await db.refresh(current_user)
     return current_user

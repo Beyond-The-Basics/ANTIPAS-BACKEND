@@ -50,6 +50,20 @@ async def test_update_me_email_conflict(client):
     assert resp.status_code == 409
 
 
+async def test_update_me_saves_location(client):
+    user = await make_user(client, "Locatable", "+15555551005")
+    resp = await client.patch(
+        "/api/v1/users/me",
+        json={"latitude": 33.5731, "longitude": -7.5898, "radius_km": 15},
+        headers=auth_header(user["id"]),
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["latitude"] == 33.5731
+    assert body["longitude"] == -7.5898
+    assert body["radius_km"] == 15
+
+
 async def test_unknown_user_id_is_unauthorized(client):
     resp = await client.get("/api/v1/users/me", headers=auth_header(uuid.uuid4()))
     assert resp.status_code == 401

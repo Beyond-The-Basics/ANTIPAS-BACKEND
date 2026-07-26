@@ -9,6 +9,7 @@ from app.models.moderation import Report
 from app.models.search import (
     GuestApplication,
     GuestSearch,
+    NegotiationMessage,
     OpponentApplication,
     OpponentSearch,
     PlayerAvailability,
@@ -28,6 +29,7 @@ __all__ = [
     "GuestSearch",
     "Match",
     "MatchGuestParticipant",
+    "NegotiationMessage",
     "OpponentApplication",
     "OpponentSearch",
     "PlayerAvailability",

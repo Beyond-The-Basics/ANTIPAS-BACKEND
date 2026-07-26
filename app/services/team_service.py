@@ -21,6 +21,7 @@ from app.models.enums import MembershipStatus, Sport, TeamRole
 from app.models.game_type import GameType
 from app.models.team import DEFAULT_COUNTRY, Team, TeamMembership
 from app.models.user import User
+from app.schemas.membership import LineupSlot
 from app.schemas.team import TeamCreate, TeamUpdate
 
 CAPTAIN_ONLY = {TeamRole.CAPTAIN}
@@ -103,7 +104,18 @@ async def create_team(db: AsyncSession, data: TeamCreate, captain: User) -> Team
 
 
 async def update_team(db: AsyncSession, team: Team, data: TeamUpdate, actor: User) -> Team:
-    await require_role(db, team.id, actor, CAPTAIN_OR_ADMIN)
+    membership = await require_role(db, team.id, actor, CAPTAIN_OR_ADMIN)
+
+    # The lineup type and the completion state are the captain's calls (admins manage members but
+    # don't set the format or decide the team is "ready"). Everything else is captain-or-admin.
+    lineup_change = data.game_type_id is not None and data.game_type_id != team.game_type_id
+    completed_change = data.completed is not None and data.completed != team.completed
+    if (lineup_change or completed_change) and membership.role != TeamRole.CAPTAIN:
+        raise HTTPException(
+            status.HTTP_403_FORBIDDEN,
+            "Only the captain can set the lineup type or mark the team complete",
+        )
+
     if data.name is not None:
         team.name = data.name
     if data.description is not None:
@@ -115,35 +127,24 @@ async def update_team(db: AsyncSession, team: Team, data: TeamUpdate, actor: Use
     if data.city is not None:
         team.city = data.city
 
-    game_type_changed = False
-    if data.game_type_id is not None and data.game_type_id != team.game_type_id:
+    if lineup_change:
         game_type = await db.get(GameType, data.game_type_id)
         if game_type is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "Game type not found")
         if game_type.sport != team.sport:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "Game type does not match the team's sport")
         team.game_type_id = data.game_type_id
-        game_type_changed = True
 
     if data.completed is not None:
         team.completed = data.completed
 
-    # Whenever the team ends this call completed — either just now, or already completed with a
-    # lineup that just changed — the active roster must actually meet the lineup's minimum.
-    # Un-completing, or editing unrelated fields on an already-completed team, needs no check.
-    if team.completed and (data.completed is True or game_type_changed):
-        if team.game_type_id is None:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST, "Pick a lineup type before marking the team completed"
-            )
-        game_type = await db.get(GameType, team.game_type_id)
-        active_count = len(await list_active_members(db, team.id))
-        if active_count < game_type.players_per_side:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"{game_type.label} needs at least {game_type.players_per_side} active members — "
-                f"team has {active_count}",
-            )
+    # A completed team still needs a lineup type (the format it's committing to and that any
+    # OpponentSearch inherits) — but the captain may mark it complete before the roster is full,
+    # so there is deliberately no minimum-member check here.
+    if team.completed and (completed_change or lineup_change) and team.game_type_id is None:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Pick a lineup type before marking the team completed"
+        )
 
     await db.commit()
     await db.refresh(team)
@@ -196,6 +197,24 @@ async def set_jersey_number(
     await db.commit()
     await db.refresh(target)
     return target
+
+
+async def set_lineup(
+    db: AsyncSession, team: Team, actor: User, assignments: list[LineupSlot]
+) -> list[TeamMembership]:
+    """Captain arranges the pitch: each assignment pins a member to a slot index (or benches them
+    with a null position). Arranging the formation is the captain's call, like the lineup type."""
+    await require_role(db, team.id, actor, CAPTAIN_ONLY)
+    members = {m.user_id: m for m in await list_active_members(db, team.id)}
+    for a in assignments:
+        member = members.get(a.user_id)
+        if member is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, f"User {a.user_id} is not an active member of this team"
+            )
+        member.lineup_position = a.position
+    await db.commit()
+    return await list_active_members(db, team.id)
 
 
 async def remove_member(db: AsyncSession, team: Team, actor: User, target_user_id: uuid.UUID) -> None:

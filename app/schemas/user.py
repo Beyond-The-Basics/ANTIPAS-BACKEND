@@ -34,6 +34,11 @@ class UserUpdate(BaseModel):
     stamina_rating: int | None = Field(default=None, ge=MIN_RATING, le=MAX_RATING)
     agility_rating: int | None = Field(default=None, ge=MIN_RATING, le=MAX_RATING)
 
+    # Saved discoverability location, editable independently of publishing an availability.
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    radius_km: float | None = Field(default=None, gt=0, le=200)
+
 
 class UserRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -56,3 +61,7 @@ class UserRead(BaseModel):
     stamina_rating: int | None
     agility_rating: int | None
     onboarding_completed: bool
+
+    latitude: float | None
+    longitude: float | None
+    radius_km: float | None

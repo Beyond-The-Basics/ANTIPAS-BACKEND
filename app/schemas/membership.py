@@ -18,11 +18,24 @@ class MembershipRead(BaseModel):
     role: TeamRole
     status: MembershipStatus
     jersey_number: int | None
+    lineup_position: int | None
     joined_at: datetime
 
 
 class JerseyNumberUpdate(BaseModel):
     jersey_number: int | None = Field(default=None, ge=MIN_JERSEY_NUMBER, le=MAX_JERSEY_NUMBER)
+
+
+class LineupSlot(BaseModel):
+    user_id: uuid.UUID
+    # 0-based slot index on the pitch, or null to bench the player.
+    position: int | None = Field(default=None, ge=0)
+
+
+class LineupSet(BaseModel):
+    """The captain's full pitch arrangement — a list of (member, slot) assignments."""
+
+    assignments: list[LineupSlot]
 
 
 class RoleUpdate(BaseModel):

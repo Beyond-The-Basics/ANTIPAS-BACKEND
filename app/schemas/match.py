@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict
 
@@ -17,6 +17,6 @@ class MatchRead(BaseModel):
     game_type_id: uuid.UUID
     city: str
     pitch: str
-    date: date
+    date: datetime
     status: MatchStatus
     created_at: datetime

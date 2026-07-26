@@ -21,7 +21,7 @@ async def a_confirmed_match(client, db_session, suffix: str):
         await client.post(
             f"/api/v1/teams/{home['id']}/opponent-searches",
             # No game_type_id — inherited from the (already-completed) publishing team.
-            json={"city": "Casablanca", "pitch": "Stade X", "date": "2026-09-01"},
+            json={"city": "Casablanca", "pitch": "Stade X", "date": "2026-09-01T18:00:00"},
             headers=auth_header(cap_a["id"]),
         )
     ).json()
@@ -32,10 +32,13 @@ async def a_confirmed_match(client, db_session, suffix: str):
             headers=auth_header(cap_b["id"]),
         )
     ).json()
+    # accept the challenge, then the away captain agrees to the home team's seeded terms.
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
     match = (
         await client.post(
-            f"/api/v1/opponent-applications/{app_b['id']}/confirm",
-            headers=auth_header(cap_a["id"]),
+            f"/api/v1/opponent-applications/{app_b['id']}/agree", headers=auth_header(cap_b["id"])
         )
     ).json()
     return match, cap_a, cap_b, home, away

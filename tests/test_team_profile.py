@@ -170,17 +170,49 @@ async def test_cannot_complete_without_lineup_type(client):
     assert "lineup" in resp.json()["detail"].lower()
 
 
-async def test_cannot_complete_with_lineup_but_short_roster(client, db_session):
+async def test_captain_can_complete_with_lineup_but_short_roster(client, db_session):
+    # The captain may mark a team complete before the roster is full, as long as a lineup type is
+    # set — there is no minimum-member gate.
     cap = await make_user(client, "Cap", "+15555553015")
     team = await make_team(client, cap["id"], sport="soccer")
-    gt = await a_game_type(db_session, sport="soccer")  # 5v5 -> needs 5 active members
+    gt = await a_game_type(db_session, sport="soccer")  # 5v5, but roster is just the captain
     resp = await client.patch(
         f"/api/v1/teams/{team['id']}",
         json={"game_type_id": str(gt.id), "completed": True},
         headers=auth_header(cap["id"]),
     )
-    assert resp.status_code == 400
-    assert "5" in resp.json()["detail"]
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["completed"] is True
+
+
+async def test_admin_cannot_set_lineup_type_or_complete(client, db_session):
+    cap = await make_user(client, "Cap", "+15555553017")
+    admin = await make_user(client, "Adm", "+15555553018")
+    team = await make_team(client, cap["id"], sport="soccer")
+    await add_member(db_session, team["id"], admin["id"], role="admin")
+    gt = await a_game_type(db_session, sport="soccer")
+
+    lineup = await client.patch(
+        f"/api/v1/teams/{team['id']}",
+        json={"game_type_id": str(gt.id)},
+        headers=auth_header(admin["id"]),
+    )
+    assert lineup.status_code == 403
+
+    # Admin can still edit ordinary fields (proves it's the field, not the whole call, that's gated).
+    ok = await client.patch(
+        f"/api/v1/teams/{team['id']}",
+        json={"city": "Rabat"},
+        headers=auth_header(admin["id"]),
+    )
+    assert ok.status_code == 200
+
+    complete = await client.patch(
+        f"/api/v1/teams/{team['id']}",
+        json={"completed": True},
+        headers=auth_header(admin["id"]),
+    )
+    assert complete.status_code == 403
 
 
 async def test_completes_once_lineup_and_roster_both_satisfied(client, db_session):
@@ -217,7 +249,9 @@ async def test_editing_unrelated_field_on_completed_team_does_not_reverify(clien
     assert resp.status_code == 200 and resp.json()["completed"] is True
 
 
-async def test_changing_lineup_on_completed_team_reverifies_roster(client, db_session):
+async def test_changing_lineup_on_completed_team_does_not_gate_on_roster(client, db_session):
+    # No minimum-member gate: the captain can switch a completed team to a larger format even if
+    # the current roster couldn't fill it (unfilled slots just show empty on the lineup).
     cap = await make_user(client, "Cap", "+15555553022")
     team = await completed_team(client, db_session, cap, "Kickers", sport="soccer")  # 5v5, 5 members
     eleven_a_side = await a_game_type(db_session, sport="soccer")
@@ -234,8 +268,8 @@ async def test_changing_lineup_on_completed_team_reverifies_roster(client, db_se
         json={"game_type_id": str(eleven_a_side.id)},
         headers=auth_header(cap["id"]),
     )
-    assert resp.status_code == 400
-    assert "11" in resp.json()["detail"]
+    assert resp.status_code == 200, resp.text
+    assert resp.json()["completed"] is True
 
 
 # --- opponent search inherits the team's lineup, not its own ------------------
