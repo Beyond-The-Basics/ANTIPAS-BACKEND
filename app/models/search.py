@@ -1,7 +1,7 @@
 import uuid
 from datetime import date, datetime
 
-from sqlalchemy import Date, DateTime, ForeignKey, String
+from sqlalchemy import Date, DateTime, Float, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -111,7 +111,17 @@ class PlayerAvailability(UUIDPKMixin, TimestampMixin, Base):
 
     user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"), index=True)
     sport: Mapped[Sport] = mapped_column(str_enum(Sport, length=32))
+    # City chosen from the client's fixed country→city list, so values stay queryable/consistent.
     city: Mapped[str] = mapped_column(String(120), index=True)
+    # Country the city belongs to (also from the fixed list); scopes and labels the city.
+    country: Mapped[str | None] = mapped_column(String(60), index=True, default=None)
+    # Broader area than city, e.g. "Casablanca-Settat" — player-chosen, not derived.
+    region: Mapped[str | None] = mapped_column(String(120), index=True, default=None)
+    latitude: Mapped[float | None] = mapped_column(Float, default=None)
+    longitude: Mapped[float | None] = mapped_column(Float, default=None)
+    # Player-chosen privacy radius: how far from their shared location a searcher's point may be
+    # for this listing to surface in results.
+    radius_km: Mapped[float | None] = mapped_column(Float, default=None)
     status: Mapped[ListingStatus] = mapped_column(
         str_enum(ListingStatus, length=16), default=ListingStatus.OPEN
     )
