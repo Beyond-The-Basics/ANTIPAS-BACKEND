@@ -40,6 +40,13 @@ async def team_member_ids(client, team_id):
 # --- RosterSearch -------------------------------------------------------------
 
 
+async def test_publish_defaults_country_to_team(client):
+    cap = await make_user(client, "Cap", "+15555553099")
+    team = await make_team(client, cap["id"])  # country defaults to Morocco
+    search = await publish_search(client, team["id"], cap["id"])
+    assert search["country"] == "Morocco"
+
+
 async def test_publish_requires_captain_or_admin(client):
     cap = await make_user(client, "Cap", "+15555553000")
     outsider = await make_user(client, "Out", "+15555553001")

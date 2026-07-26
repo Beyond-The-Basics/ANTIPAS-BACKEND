@@ -199,3 +199,58 @@ async def test_leave_when_not_a_member_404(client):
         headers=auth_header(outsider["id"]),
     )
     assert resp.status_code == 404
+
+
+async def test_captain_sets_lineup_positions(client, db_session):
+    cap = await make_user(client, "Cap", "+15555559200")
+    p1 = await make_user(client, "P1", "+15555559201")
+    team = await make_team(client, cap["id"])
+    await add_member(db_session, team["id"], p1["id"])
+
+    resp = await client.put(
+        f"/api/v1/teams/{team['id']}/lineup",
+        json={"assignments": [
+            {"user_id": cap["id"], "position": 0},
+            {"user_id": p1["id"], "position": 3},
+        ]},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 200, resp.text
+    positions = {m["user_id"]: m["lineup_position"] for m in resp.json()}
+    assert positions[cap["id"]] == 0
+    assert positions[p1["id"]] == 3
+
+    # benching sets it back to null
+    resp = await client.put(
+        f"/api/v1/teams/{team['id']}/lineup",
+        json={"assignments": [{"user_id": p1["id"], "position": None}]},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 200
+    assert {m["user_id"]: m["lineup_position"] for m in resp.json()}[p1["id"]] is None
+
+
+async def test_non_captain_cannot_set_lineup(client, db_session):
+    cap = await make_user(client, "Cap", "+15555559210")
+    admin = await make_user(client, "Adm", "+15555559211")
+    team = await make_team(client, cap["id"])
+    await add_member(db_session, team["id"], admin["id"], role="admin")
+
+    resp = await client.put(
+        f"/api/v1/teams/{team['id']}/lineup",
+        json={"assignments": [{"user_id": admin["id"], "position": 0}]},
+        headers=auth_header(admin["id"]),
+    )
+    assert resp.status_code == 403
+
+
+async def test_lineup_rejects_non_member(client, db_session):
+    cap = await make_user(client, "Cap", "+15555559220")
+    outsider = await make_user(client, "Out", "+15555559221")
+    team = await make_team(client, cap["id"])
+    resp = await client.put(
+        f"/api/v1/teams/{team['id']}/lineup",
+        json={"assignments": [{"user_id": outsider["id"], "position": 0}]},
+        headers=auth_header(cap["id"]),
+    )
+    assert resp.status_code == 404

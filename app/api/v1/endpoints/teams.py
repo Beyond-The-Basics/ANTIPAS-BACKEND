@@ -7,7 +7,13 @@ from app.api.deps import get_current_user
 from app.db.session import get_db
 from app.models.enums import Sport
 from app.models.user import User
-from app.schemas.membership import JerseyNumberUpdate, MembershipRead, RoleUpdate, TransferCaptain
+from app.schemas.membership import (
+    JerseyNumberUpdate,
+    LineupSet,
+    MembershipRead,
+    RoleUpdate,
+    TransferCaptain,
+)
 from app.schemas.team import TeamCreate, TeamRead, TeamUpdate
 from app.services import team_service
 
@@ -88,6 +94,17 @@ async def set_jersey_number(
 ):
     team = await team_service.get_team_or_404(db, team_id)
     return await team_service.set_jersey_number(db, team, current_user, user_id, data.jersey_number)
+
+
+@router.put("/{team_id}/lineup", response_model=list[MembershipRead])
+async def set_lineup(
+    team_id: uuid.UUID,
+    data: LineupSet,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    team = await team_service.get_team_or_404(db, team_id)
+    return await team_service.set_lineup(db, team, current_user, data.assignments)
 
 
 @router.delete("/{team_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)

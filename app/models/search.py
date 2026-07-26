@@ -21,7 +21,10 @@ class RosterSearch(UUIDPKMixin, TimestampMixin, Base):
     __tablename__ = "roster_searches"
 
     team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"), index=True)
+    # City/country chosen from the client's fixed country→city list (not free text), so recruiting
+    # listings stay queryable and can be plotted on the discovery map.
     city: Mapped[str] = mapped_column(String(120), index=True)
+    country: Mapped[str | None] = mapped_column(String(60), index=True, default=None)
     status: Mapped[ListingStatus] = mapped_column(
         str_enum(ListingStatus, length=16), default=ListingStatus.OPEN
     )
