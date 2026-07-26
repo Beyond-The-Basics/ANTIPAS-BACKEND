@@ -32,7 +32,7 @@ async def publish_roster_search(
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
-    return await roster_service.publish_roster_search(db, team, current_user, data.city)
+    return await roster_service.publish_roster_search(db, team, current_user, data.city, data.country)
 
 
 @router.get("/roster-searches", response_model=list[RosterSearchRead])

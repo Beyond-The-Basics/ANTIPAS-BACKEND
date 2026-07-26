@@ -8,6 +8,7 @@ from app.models.enums import ApplicationDirection, ApplicationStatus, ListingSta
 
 class RosterSearchCreate(BaseModel):
     city: str
+    country: str | None = None
 
 
 class RosterSearchRead(BaseModel):
@@ -16,6 +17,7 @@ class RosterSearchRead(BaseModel):
     id: uuid.UUID
     team_id: uuid.UUID
     city: str
+    country: str | None
     status: ListingStatus
     expires_at: datetime
     created_at: datetime

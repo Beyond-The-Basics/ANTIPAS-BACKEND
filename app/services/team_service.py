@@ -21,6 +21,7 @@ from app.models.enums import MembershipStatus, Sport, TeamRole
 from app.models.game_type import GameType
 from app.models.team import DEFAULT_COUNTRY, Team, TeamMembership
 from app.models.user import User
+from app.schemas.membership import LineupSlot
 from app.schemas.team import TeamCreate, TeamUpdate
 
 CAPTAIN_ONLY = {TeamRole.CAPTAIN}
@@ -196,6 +197,24 @@ async def set_jersey_number(
     await db.commit()
     await db.refresh(target)
     return target
+
+
+async def set_lineup(
+    db: AsyncSession, team: Team, actor: User, assignments: list[LineupSlot]
+) -> list[TeamMembership]:
+    """Captain arranges the pitch: each assignment pins a member to a slot index (or benches them
+    with a null position). Arranging the formation is the captain's call, like the lineup type."""
+    await require_role(db, team.id, actor, CAPTAIN_ONLY)
+    members = {m.user_id: m for m in await list_active_members(db, team.id)}
+    for a in assignments:
+        member = members.get(a.user_id)
+        if member is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, f"User {a.user_id} is not an active member of this team"
+            )
+        member.lineup_position = a.position
+    await db.commit()
+    return await list_active_members(db, team.id)
 
 
 async def remove_member(db: AsyncSession, team: Team, actor: User, target_user_id: uuid.UUID) -> None:

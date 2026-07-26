@@ -39,11 +39,16 @@ async def get_search_or_404(db: AsyncSession, search_id: uuid.UUID) -> RosterSea
     return search
 
 
-async def publish_roster_search(db: AsyncSession, team: Team, actor: User, city: str) -> RosterSearch:
+async def publish_roster_search(
+    db: AsyncSession, team: Team, actor: User, city: str, country: str | None = None
+) -> RosterSearch:
     await team_service.require_role(db, team.id, actor, team_service.CAPTAIN_OR_ADMIN)
     search = RosterSearch(
         team_id=team.id,
         city=city,
+        # Default to the team's own country so the listing plots on the map even if the client
+        # doesn't send one explicitly.
+        country=country or team.country,
         status=ListingStatus.OPEN,
         expires_at=datetime.now(UTC) + timedelta(hours=settings.listing_expiry_hours),
     )
