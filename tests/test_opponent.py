@@ -251,6 +251,61 @@ async def test_only_negotiating_teams_can_message(client, db_session):
     assert [m["body"] for m in listed.json()] == ["Can we push to 20:30?"]
 
 
+async def test_proposal_history_records_seed_and_counters(client, db_session):
+    cap_a = await make_user(client, "CapA", "+15555554040")
+    cap_b = await make_user(client, "CapB", "+15555554041")
+    stranger = await make_user(client, "Str", "+15555554042")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
+    search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+
+    # accepting seeds the first history entry from the search's own terms
+    seeded = await client.get(
+        f"/api/v1/opponent-applications/{app_b['id']}/proposals", headers=auth_header(cap_a["id"])
+    )
+    assert seeded.status_code == 200
+    assert len(seeded.json()) == 1
+    first = seeded.json()[0]
+    assert first["proposed_by_team_id"] == home["id"]
+    assert first["pitch"] == "Stade Municipal"
+    assert first["end_date"] is None and first["pitch_address"] is None
+
+    # away counters with a full time range + pitch address
+    countered = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/propose",
+        json={
+            "date": "2026-09-05T18:30:00",
+            "end_date": "2026-09-05T20:00:00",
+            "pitch": "Complexe Sportif OCP",
+            "pitch_address": "Ain Sebaa, Casablanca",
+        },
+        headers=auth_header(cap_b["id"]),
+    )
+    assert countered.status_code == 200
+    assert countered.json()["proposed_end_date"] is not None
+    assert countered.json()["proposed_pitch_address"] == "Ain Sebaa, Casablanca"
+
+    history = (
+        await client.get(
+            f"/api/v1/opponent-applications/{app_b['id']}/proposals", headers=auth_header(cap_b["id"])
+        )
+    ).json()
+    assert len(history) == 2
+    assert history[0]["proposed_by_team_id"] == home["id"]
+    assert history[1]["proposed_by_team_id"] == away["id"]
+    assert history[1]["pitch_address"] == "Ain Sebaa, Casablanca"
+
+    # a non-member is blocked from reading the history, same as chat
+    blocked = await client.get(
+        f"/api/v1/opponent-applications/{app_b['id']}/proposals", headers=auth_header(stranger["id"])
+    )
+    assert blocked.status_code == 403
+
+
 async def test_cannot_agree_twice(client, db_session):
     cap_a = await make_user(client, "CapA", "+15555554013")
     cap_b = await make_user(client, "CapB", "+15555554014")
