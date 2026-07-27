@@ -18,6 +18,12 @@ class Sport(enum.StrEnum):
     SOCCER = "soccer"
     TENNIS = "tennis"
     PADDLE = "paddle"
+    BASKETBALL = "basketball"
+
+
+class Gender(enum.StrEnum):
+    MALE = "male"
+    FEMALE = "female"
 
 
 class TeamRole(enum.StrEnum):

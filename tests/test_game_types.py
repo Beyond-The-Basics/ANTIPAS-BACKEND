@@ -40,3 +40,26 @@ async def test_no_auth_required(client, db_session):
     """Reference data — same visibility as the team/sport directory, no bearer token needed."""
     resp = await client.get("/api/v1/game-types")
     assert resp.status_code == 200
+
+
+async def test_basketball_is_in_the_seed_catalog():
+    """The seed module isn't run against the (per-test, empty) test DB — see the db_session
+    fixture — so this checks the catalog data directly rather than through GET /game-types."""
+    from app.db.seed import GAME_TYPE_CATALOG
+    from app.models.enums import Sport
+
+    assert GAME_TYPE_CATALOG[Sport.BASKETBALL] == [("3x3", 3), ("5v5", 5)]
+
+
+async def test_filter_by_sport_includes_basketball(client, db_session):
+    from app.models.game_type import GameType
+
+    bball = GameType(sport="basketball", label="5v5", players_per_side=5)
+    db_session.add(bball)
+    await db_session.commit()
+    await db_session.refresh(bball)
+
+    resp = await client.get("/api/v1/game-types", params={"sport": "basketball"})
+    assert resp.status_code == 200
+    ids = {g["id"] for g in resp.json()}
+    assert str(bball.id) in ids

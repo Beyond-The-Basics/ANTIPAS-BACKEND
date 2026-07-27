@@ -18,7 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.enums import ApplicationStatus, ListingStatus, MatchStatus, SearchType, Sport
 from app.models.match import Match
-from app.models.search import NegotiationMessage, OpponentApplication, OpponentSearch
+from app.models.search import NegotiationMessage, NegotiationProposal, OpponentApplication, OpponentSearch
 from app.models.team import Team
 from app.models.user import User
 from app.schemas.opponent import OpponentSearchCreate
@@ -169,6 +169,14 @@ async def accept_challenge(
     application.proposed_date = search.date
     application.proposed_pitch = search.pitch
     application.proposed_by_team_id = search.team_id
+    db.add(
+        NegotiationProposal(
+            opponent_application_id=application.id,
+            proposed_by_team_id=search.team_id,
+            date=search.date,
+            pitch=search.pitch,
+        )
+    )
     await db.commit()
     await db.refresh(application)
     return application
@@ -188,18 +196,49 @@ async def _actor_team_in_negotiation(
 
 
 async def propose_terms(
-    db: AsyncSession, application: OpponentApplication, actor: User, date, pitch: str
+    db: AsyncSession,
+    application: OpponentApplication,
+    actor: User,
+    date,
+    pitch: str,
+    end_date=None,
+    pitch_address: str | None = None,
 ) -> OpponentApplication:
     if application.status != ApplicationStatus.ACCEPTED:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "This challenge is not under negotiation")
     search = await get_search_or_404(db, application.opponent_search_id)
     actor_team = await _actor_team_in_negotiation(db, search, application, actor)
     application.proposed_date = date
+    application.proposed_end_date = end_date
     application.proposed_pitch = pitch
+    application.proposed_pitch_address = pitch_address
     application.proposed_by_team_id = actor_team
+    db.add(
+        NegotiationProposal(
+            opponent_application_id=application.id,
+            proposed_by_team_id=actor_team,
+            date=date,
+            end_date=end_date,
+            pitch=pitch,
+            pitch_address=pitch_address,
+        )
+    )
     await db.commit()
     await db.refresh(application)
     return application
+
+
+async def list_proposals(
+    db: AsyncSession, application: OpponentApplication, actor: User
+) -> list[NegotiationProposal]:
+    search = await get_search_or_404(db, application.opponent_search_id)
+    await _actor_team_in_negotiation(db, search, application, actor)
+    result = await db.scalars(
+        select(NegotiationProposal)
+        .where(NegotiationProposal.opponent_application_id == application.id)
+        .order_by(NegotiationProposal.created_at)
+    )
+    return list(result)
 
 
 async def agree(db: AsyncSession, application: OpponentApplication, actor: User) -> Match:

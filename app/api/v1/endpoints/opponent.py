@@ -13,6 +13,7 @@ from app.schemas.match import MatchRead
 from app.schemas.opponent import (
     NegotiationMessageCreate,
     NegotiationMessageRead,
+    NegotiationProposalRead,
     OpponentApplicationCreate,
     OpponentApplicationRead,
     OpponentSearchCreate,
@@ -147,13 +148,25 @@ async def propose_terms(
     db: AsyncSession = Depends(get_db),
 ):
     application = await opponent_service.get_application_or_404(db, application_id)
-    application = await opponent_service.propose_terms(db, application, current_user, data.date, data.pitch)
+    application = await opponent_service.propose_terms(
+        db,
+        application,
+        current_user,
+        data.date,
+        data.pitch,
+        end_date=data.end_date,
+        pitch_address=data.pitch_address,
+    )
     await hub.broadcast(
         str(application_id),
         {
             "type": "proposal",
             "proposed_date": application.proposed_date.isoformat() if application.proposed_date else None,
+            "proposed_end_date": application.proposed_end_date.isoformat()
+            if application.proposed_end_date
+            else None,
             "proposed_pitch": application.proposed_pitch,
+            "proposed_pitch_address": application.proposed_pitch_address,
             "proposed_by_team_id": str(application.proposed_by_team_id)
             if application.proposed_by_team_id
             else None,
@@ -172,6 +185,19 @@ async def agree_terms(
     match = await opponent_service.agree(db, application, current_user)
     await hub.broadcast(str(application_id), {"type": "agreed", "match_id": str(match.id)})
     return match
+
+
+@router.get(
+    "/opponent-applications/{application_id}/proposals",
+    response_model=list[NegotiationProposalRead],
+)
+async def list_proposals(
+    application_id: uuid.UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    application = await opponent_service.get_application_or_404(db, application_id)
+    return await opponent_service.list_proposals(db, application, current_user)
 
 
 @router.get(

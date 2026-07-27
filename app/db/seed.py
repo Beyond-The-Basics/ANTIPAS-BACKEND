@@ -3,7 +3,8 @@
 Idempotent: safe to run repeatedly. Run with `python -m app.db.seed` (or `make seed`).
 
 Currently seeds the GameType catalog confirmed in ../ANTIPAS/DATA_MODEL.md:
-soccer -> 5v5, 6v6, 7v7, 11v11; tennis -> singles, doubles; paddle -> doubles.
+soccer -> 5v5, 6v6, 7v7, 11v11; tennis -> singles, doubles; paddle -> doubles;
+basketball -> 3x3, 5v5.
 """
 
 import asyncio
@@ -20,6 +21,7 @@ GAME_TYPE_CATALOG: dict[Sport, list[tuple[str, int]]] = {
     Sport.SOCCER: [("5v5", 5), ("6v6", 6), ("7v7", 7), ("11v11", 11)],
     Sport.TENNIS: [("singles", 1), ("doubles", 2)],
     Sport.PADDLE: [("doubles", 2)],
+    Sport.BASKETBALL: [("3x3", 3), ("5v5", 5)],
 }
 
 

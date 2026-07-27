@@ -44,16 +44,20 @@ class OpponentApplicationRead(BaseModel):
     status: ApplicationStatus
     # Current negotiation proposal (present once the challenge is accepted).
     proposed_date: datetime | None
+    proposed_end_date: datetime | None
     proposed_pitch: str | None
+    proposed_pitch_address: str | None
     proposed_by_team_id: uuid.UUID | None
     created_at: datetime
 
 
 class ProposeTerms(BaseModel):
-    """Either captain proposes a kickoff time and pitch during the negotiation."""
+    """Either captain proposes a kickoff window and pitch during the negotiation."""
 
     date: datetime
+    end_date: datetime | None = None
     pitch: str = Field(min_length=1, max_length=255)
+    pitch_address: str | None = Field(default=None, max_length=255)
 
 
 class NegotiationMessageCreate(BaseModel):
@@ -67,4 +71,19 @@ class NegotiationMessageRead(BaseModel):
     opponent_application_id: uuid.UUID
     sender_user_id: uuid.UUID
     body: str
+    created_at: datetime
+
+
+class NegotiationProposalRead(BaseModel):
+    """One immutable entry in a negotiation's offer history."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    opponent_application_id: uuid.UUID
+    proposed_by_team_id: uuid.UUID
+    date: datetime
+    end_date: datetime | None
+    pitch: str
+    pitch_address: str | None
     created_at: datetime
