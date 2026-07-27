@@ -4,6 +4,7 @@ from sqlalchemy import ARRAY, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base, TimestampMixin, UUIDPKMixin
+from app.models.enums import Gender, str_enum
 
 if TYPE_CHECKING:
     from app.models.team import TeamMembership
@@ -33,6 +34,7 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     # freshly created account (via signup or the dev `POST /users`) is still a valid row.
     nickname: Mapped[str | None] = mapped_column(String(60), default=None)
     age: Mapped[int | None] = mapped_column(Integer, default=None)
+    gender: Mapped[Gender | None] = mapped_column(str_enum(Gender, length=16), default=None)
     country: Mapped[str] = mapped_column(String(60), default=DEFAULT_COUNTRY)
     city: Mapped[str | None] = mapped_column(String(120), default=None)
     # Sport values (str_enum stores the value, e.g. "soccer"); plain ARRAY(String) here rather

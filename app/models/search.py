@@ -80,7 +80,9 @@ class OpponentApplication(UUIDPKMixin, TimestampMixin, Base):
     # Live negotiation terms once the challenge is ACCEPTED: the current proposed kickoff and pitch,
     # and which of the two teams made that proposal (the *other* team's captain agrees to finalize).
     proposed_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    proposed_end_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     proposed_pitch: Mapped[str | None] = mapped_column(String(255), default=None)
+    proposed_pitch_address: Mapped[str | None] = mapped_column(String(255), default=None)
     proposed_by_team_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("teams.id"), default=None
     )
@@ -97,6 +99,23 @@ class NegotiationMessage(UUIDPKMixin, TimestampMixin, Base):
     )
     sender_user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id"))
     body: Mapped[str] = mapped_column(String(2000))
+
+
+class NegotiationProposal(UUIDPKMixin, TimestampMixin, Base):
+    """An immutable snapshot of one negotiation offer (the initial terms seeded on accept, plus
+    every subsequent counter). OpponentApplication.proposed_* only holds the *current* terms; this
+    table is the append-only history behind the "Offer history" timeline."""
+
+    __tablename__ = "negotiation_proposals"
+
+    opponent_application_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("opponent_applications.id"), index=True
+    )
+    proposed_by_team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"))
+    date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    end_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
+    pitch: Mapped[str] = mapped_column(String(255))
+    pitch_address: Mapped[str | None] = mapped_column(String(255), default=None)
 
 
 class GuestSearch(UUIDPKMixin, TimestampMixin, Base):

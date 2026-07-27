@@ -31,6 +31,7 @@ async def test_new_signup_defaults_country_and_not_onboarded(client):
     assert user["country"] == "Morocco"
     assert user["favorite_sports"] == []
     assert user["nickname"] is None
+    assert user["gender"] is None
     assert user["speed_rating"] is None
 
 
@@ -38,10 +39,13 @@ async def test_patch_me_saves_onboarding_fields_incrementally(client):
     body = await signup(client)
     headers = {"Authorization": f"Bearer {body['access_token']}"}
 
-    step1 = await client.patch(PATCH_ME, json={"nickname": "Naz", "age": 27}, headers=headers)
+    step1 = await client.patch(
+        PATCH_ME, json={"nickname": "Naz", "age": 27, "gender": "female"}, headers=headers
+    )
     assert step1.status_code == 200
     assert step1.json()["nickname"] == "Naz"
     assert step1.json()["age"] == 27
+    assert step1.json()["gender"] == "female"
     # still false — PATCH alone never flips the flag
     assert step1.json()["onboarding_completed"] is False
 
@@ -55,10 +59,10 @@ async def test_patch_me_saves_onboarding_fields_incrementally(client):
     assert step2.json()["nickname"] == "Naz"
 
     step3 = await client.patch(
-        PATCH_ME, json={"favorite_sports": ["soccer", "paddle"]}, headers=headers
+        PATCH_ME, json={"favorite_sports": ["soccer", "paddle", "basketball"]}, headers=headers
     )
     assert step3.status_code == 200
-    assert set(step3.json()["favorite_sports"]) == {"soccer", "paddle"}
+    assert set(step3.json()["favorite_sports"]) == {"soccer", "paddle", "basketball"}
 
     step4 = await client.patch(
         PATCH_ME,
@@ -101,6 +105,7 @@ async def test_complete_onboarding_does_not_require_fields_filled(client):
         ("speed_rating", 6),  # above MAX_RATING
         ("nickname", ""),  # below min_length
         ("favorite_sports", ["not-a-sport"]),
+        ("gender", "other"),  # not a Gender member
     ],
 )
 async def test_patch_me_validates_onboarding_fields(client, field, value):
