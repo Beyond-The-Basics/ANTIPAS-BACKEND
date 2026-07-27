@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import Sport
+from app.models.enums import Gender, Sport
 
 MIN_AGE = 13
 MAX_AGE = 100
@@ -26,6 +26,7 @@ class UserUpdate(BaseModel):
     # saves during the wizard (see POST /users/me/onboarding/complete for the completion flag) ---
     nickname: str | None = Field(default=None, min_length=1, max_length=60)
     age: int | None = Field(default=None, ge=MIN_AGE, le=MAX_AGE)
+    gender: Gender | None = None
     country: str | None = Field(default=None, min_length=1, max_length=60)
     city: str | None = Field(default=None, min_length=1, max_length=120)
     favorite_sports: list[Sport] | None = Field(default=None, max_length=MAX_FAVORITE_SPORTS)
@@ -53,6 +54,7 @@ class UserRead(BaseModel):
 
     nickname: str | None
     age: int | None
+    gender: Gender | None
     country: str
     city: str | None
     favorite_sports: list[Sport]

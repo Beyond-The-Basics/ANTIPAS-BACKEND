@@ -57,6 +57,8 @@ async def update_me(
         current_user.nickname = data.nickname
     if data.age is not None:
         current_user.age = data.age
+    if data.gender is not None:
+        current_user.gender = data.gender
     if data.country is not None:
         current_user.country = data.country
     if data.city is not None:

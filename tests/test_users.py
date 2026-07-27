@@ -50,6 +50,27 @@ async def test_update_me_email_conflict(client):
     assert resp.status_code == 409
 
 
+async def test_update_me_saves_gender(client):
+    user = await make_user(client, "Gendered", "+15555551007")
+    resp = await client.patch(
+        "/api/v1/users/me",
+        json={"gender": "male"},
+        headers=auth_header(user["id"]),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["gender"] == "male"
+
+
+async def test_update_me_rejects_invalid_gender(client):
+    user = await make_user(client, "Ungendered", "+15555551008")
+    resp = await client.patch(
+        "/api/v1/users/me",
+        json={"gender": "nonbinary"},
+        headers=auth_header(user["id"]),
+    )
+    assert resp.status_code == 422
+
+
 async def test_update_me_saves_location(client):
     user = await make_user(client, "Locatable", "+15555551005")
     resp = await client.patch(
