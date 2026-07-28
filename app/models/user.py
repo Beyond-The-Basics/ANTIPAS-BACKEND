@@ -4,7 +4,7 @@ from sqlalchemy import ARRAY, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base, TimestampMixin, UUIDPKMixin
-from app.models.enums import Gender, str_enum
+from app.models.enums import Gender, Locale, str_enum
 
 if TYPE_CHECKING:
     from app.models.team import TeamMembership
@@ -27,6 +27,10 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     # app/core/security.py `verify_password`).
     password_hash: Mapped[str | None] = mapped_column(String(128), default=None)
     firebase_uid: Mapped[str | None] = mapped_column(String(128), unique=True, index=True, default=None)
+    # UI language. Not nullable/wizard-gated like the onboarding fields below — every account has
+    # an active language from the moment it's created, defaulting to English until the client
+    # PATCHes the detected/selected one right after signup.
+    locale: Mapped[Locale] = mapped_column(str_enum(Locale, length=8), default=Locale.EN)
 
     # --- onboarding profile ----------------------------------------------------
     # Filled in by the post-signup step wizard (`POST /users/me/onboarding/complete`), not at

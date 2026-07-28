@@ -26,6 +26,12 @@ class Gender(enum.StrEnum):
     FEMALE = "female"
 
 
+class Locale(enum.StrEnum):
+    EN = "en"
+    FR = "fr"
+    AR = "ar"
+
+
 class TeamRole(enum.StrEnum):
     CAPTAIN = "captain"
     ADMIN = "admin"

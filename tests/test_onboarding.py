@@ -32,6 +32,7 @@ async def test_new_signup_defaults_country_and_not_onboarded(client):
     assert user["favorite_sports"] == []
     assert user["nickname"] is None
     assert user["gender"] is None
+    assert user["locale"] == "en"
     assert user["speed_rating"] is None
 
 
@@ -106,6 +107,7 @@ async def test_complete_onboarding_does_not_require_fields_filled(client):
         ("nickname", ""),  # below min_length
         ("favorite_sports", ["not-a-sport"]),
         ("gender", "other"),  # not a Gender member
+        ("locale", "de"),  # not a Locale member
     ],
 )
 async def test_patch_me_validates_onboarding_fields(client, field, value):
