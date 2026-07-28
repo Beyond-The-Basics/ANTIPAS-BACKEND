@@ -38,16 +38,28 @@ class ResendEmailService:
 class ConsoleEmailService:
     """Fallback when no `RESEND_API_KEY` is configured — local dev and tests.
 
-    Logs that a send happened, never the code itself: dev logs get pasted into issues and shared
-    terminals, and a live OTP is a credential. Tests that need the code override this dependency
-    with their own recorder instead.
+    Prints the code to the log so the flow is testable end to end without a mail provider. That
+    matters more than it sounds: Resend's sandbox sender only delivers to the account owner's own
+    address, so before a domain is verified this is the *only* way to exercise signup with an
+    arbitrary email.
+
+    The code is a live credential, so printing it is gated on not being production — a prod deploy
+    that forgot its API key must degrade to silence, not to leaking OTPs into a log aggregator.
     """
 
     async def send_verification_email(self, *, recipient_email: str, otp: str, locale: Locale) -> None:
-        logger.info(
-            "[email:stub] verification email for %s (locale=%s) — set RESEND_API_KEY to send for real",
+        if settings.is_production:
+            logger.error(
+                "[email] RESEND_API_KEY is unset in production — verification email to %s was NOT sent",
+                recipient_email,
+            )
+            return
+        logger.warning(
+            "[email:stub] verification code for %s (locale=%s): %s  "
+            "— dev only; set RESEND_API_KEY to send for real",
             recipient_email,
             locale,
+            otp,
         )
 
 

@@ -88,3 +88,34 @@ async def test_successful_send_returns_the_provider_message_id():
         httpx.MockTransport(lambda _r: httpx.Response(200, json={"id": "msg_abc"})),
     )
     assert await client.send(to="a@example.com", subject="s", text="t") == "msg_abc"
+
+
+# --- console fallback ----------------------------------------------------------
+
+
+async def test_console_stub_prints_the_code_outside_production(caplog, monkeypatch):
+    """The only way to test signup with an arbitrary address before a domain is verified."""
+    from app.core.config import settings
+    from app.services.email_service import ConsoleEmailService
+
+    monkeypatch.setattr(settings, "environment", "local")
+    with caplog.at_level("WARNING"):
+        await ConsoleEmailService().send_verification_email(
+            recipient_email="dev@example.com", otp="483921", locale=Locale.EN
+        )
+    assert "483921" in caplog.text
+    assert "dev@example.com" in caplog.text
+
+
+async def test_console_stub_never_prints_the_code_in_production(caplog, monkeypatch):
+    """A prod deploy missing its API key must go quiet, not leak live codes into the log."""
+    from app.core.config import settings
+    from app.services.email_service import ConsoleEmailService
+
+    monkeypatch.setattr(settings, "environment", "production")
+    with caplog.at_level("DEBUG"):
+        await ConsoleEmailService().send_verification_email(
+            recipient_email="user@example.com", otp="483921", locale=Locale.EN
+        )
+    assert "483921" not in caplog.text
+    assert "NOT sent" in caplog.text
