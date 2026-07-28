@@ -20,4 +20,10 @@ celery_app.conf.beat_schedule = {
         "task": "app.workers.tasks.expire_stale_listings",
         "schedule": 600.0,
     },
+    # Verification codes live 10 minutes; sweeping hourly is enough to keep the table from
+    # accumulating unused ones without competing with the requests that read it.
+    "purge-expired-email-verifications": {
+        "task": "app.workers.tasks.purge_expired_email_verifications",
+        "schedule": 3600.0,
+    },
 }

@@ -29,6 +29,17 @@ class TokenError(Exception):
     """A token that can't be trusted: expired, malformed, wrong signature, or wrong type."""
 
 
+def normalize_email(email: str) -> str:
+    """Fold an address to its stored form.
+
+    Email is the login identifier, so every path that writes or looks one up has to agree on
+    casing — signup, login, and the profile's email change. Comparing raw input against the column
+    lets `FOO@x.com` slip past a uniqueness check that `foo@x.com` would have failed, which with
+    email verification in play means two accounts can end up owning one verified address.
+    """
+    return email.strip().lower()
+
+
 def hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 

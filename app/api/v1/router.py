@@ -11,6 +11,7 @@ from app.api.v1.endpoints import (
     roster,
     teams,
     users,
+    verification,
 )
 
 api_router = APIRouter()
@@ -25,5 +26,6 @@ api_router.include_router(opponent.router)
 api_router.include_router(matches.router)
 api_router.include_router(availability.router)
 api_router.include_router(guest.router)
+api_router.include_router(verification.router)
 
 # Register future resource routers here (feedback, credits, ...).
