@@ -18,5 +18,6 @@ class MatchRead(BaseModel):
     city: str
     pitch: str
     date: datetime
+    booked_by_team_id: uuid.UUID
     status: MatchStatus
     created_at: datetime

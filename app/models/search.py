@@ -86,6 +86,10 @@ class OpponentApplication(UUIDPKMixin, TimestampMixin, Base):
     proposed_by_team_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True), ForeignKey("teams.id"), default=None
     )
+    # Which of the two teams is responsible for booking/reserving the proposed pitch.
+    proposed_booked_by_team_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("teams.id"), default=None
+    )
 
 
 class NegotiationMessage(UUIDPKMixin, TimestampMixin, Base):
@@ -116,6 +120,7 @@ class NegotiationProposal(UUIDPKMixin, TimestampMixin, Base):
     end_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), default=None)
     pitch: Mapped[str] = mapped_column(String(255))
     pitch_address: Mapped[str | None] = mapped_column(String(255), default=None)
+    booked_by_team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"))
 
 
 class GuestSearch(UUIDPKMixin, TimestampMixin, Base):

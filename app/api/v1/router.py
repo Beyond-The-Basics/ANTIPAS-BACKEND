@@ -8,6 +8,7 @@ from app.api.v1.endpoints import (
     health,
     matches,
     opponent,
+    pitches,
     roster,
     teams,
     users,
@@ -31,5 +32,6 @@ api_router.include_router(matches.router)
 api_router.include_router(availability.router)
 api_router.include_router(guest.router)
 api_router.include_router(verification.router)
+api_router.include_router(pitches.router)
 
 # Register future resource routers here (feedback, credits, ...).

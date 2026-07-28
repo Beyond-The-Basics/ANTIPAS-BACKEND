@@ -22,6 +22,7 @@ class Match(UUIDPKMixin, TimestampMixin, Base):
     city: Mapped[str] = mapped_column(String(120))
     pitch: Mapped[str] = mapped_column(String(255))
     date: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    booked_by_team_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("teams.id"))
     status: Mapped[MatchStatus] = mapped_column(
         str_enum(MatchStatus, length=24), default=MatchStatus.CONFIRMED
     )
