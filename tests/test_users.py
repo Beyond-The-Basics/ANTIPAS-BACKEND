@@ -71,6 +71,27 @@ async def test_update_me_rejects_invalid_gender(client):
     assert resp.status_code == 422
 
 
+async def test_update_me_saves_locale(client):
+    user = await make_user(client, "Multilingual", "+15555551009")
+    resp = await client.patch(
+        "/api/v1/users/me",
+        json={"locale": "fr"},
+        headers=auth_header(user["id"]),
+    )
+    assert resp.status_code == 200
+    assert resp.json()["locale"] == "fr"
+
+
+async def test_update_me_rejects_invalid_locale(client):
+    user = await make_user(client, "Monolingual", "+15555551010")
+    resp = await client.patch(
+        "/api/v1/users/me",
+        json={"locale": "de"},
+        headers=auth_header(user["id"]),
+    )
+    assert resp.status_code == 422
+
+
 async def test_update_me_saves_location(client):
     user = await make_user(client, "Locatable", "+15555551005")
     resp = await client.patch(

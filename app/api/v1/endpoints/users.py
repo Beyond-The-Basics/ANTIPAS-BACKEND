@@ -49,6 +49,8 @@ async def update_me(
     flag that marks the whole thing done."""
     if data.name is not None:
         current_user.name = data.name
+    if data.locale is not None:
+        current_user.locale = data.locale
     if data.email is not None:
         if await db.scalar(select(User).where(User.email == data.email, User.id != current_user.id)):
             raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")

@@ -3,7 +3,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.models.enums import Gender, Sport, Theme
+from app.models.enums import Gender, Locale, Sport, Theme
 
 MIN_AGE = 13
 MAX_AGE = 100
@@ -22,6 +22,7 @@ class UserUpdate(BaseModel):
     name: str | None = None
     email: str | None = None
     theme: Theme | None = None
+    locale: Locale | None = None
 
     # --- onboarding profile, all optional so this schema also serves incremental step-by-step
     # saves during the wizard (see POST /users/me/onboarding/complete for the completion flag) ---
@@ -52,6 +53,7 @@ class UserRead(BaseModel):
     email: str | None
     email_verified: bool
     theme: Theme
+    locale: Locale
     created_at: datetime
 
     nickname: str | None
