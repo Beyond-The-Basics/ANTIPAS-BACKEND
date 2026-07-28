@@ -6,6 +6,7 @@ from app.models.feedback import Dispute, Feedback
 from app.models.game_type import GameType
 from app.models.match import Match, MatchGuestParticipant
 from app.models.moderation import Report
+from app.models.pitch import Pitch
 from app.models.search import (
     GuestApplication,
     GuestSearch,
@@ -34,6 +35,7 @@ __all__ = [
     "NegotiationProposal",
     "OpponentApplication",
     "OpponentSearch",
+    "Pitch",
     "PlayerAvailability",
     "Report",
     "RosterApplication",

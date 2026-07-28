@@ -169,12 +169,15 @@ async def accept_challenge(
     application.proposed_date = search.date
     application.proposed_pitch = search.pitch
     application.proposed_by_team_id = search.team_id
+    # Whoever published the search books by default — either captain can change it in a counter.
+    application.proposed_booked_by_team_id = search.team_id
     db.add(
         NegotiationProposal(
             opponent_application_id=application.id,
             proposed_by_team_id=search.team_id,
             date=search.date,
             pitch=search.pitch,
+            booked_by_team_id=search.team_id,
         )
     )
     await db.commit()
@@ -201,6 +204,7 @@ async def propose_terms(
     actor: User,
     date,
     pitch: str,
+    booked_by_team_id: uuid.UUID,
     end_date=None,
     pitch_address: str | None = None,
 ) -> OpponentApplication:
@@ -208,11 +212,14 @@ async def propose_terms(
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "This challenge is not under negotiation")
     search = await get_search_or_404(db, application.opponent_search_id)
     actor_team = await _actor_team_in_negotiation(db, search, application, actor)
+    if booked_by_team_id not in (search.team_id, application.responding_team_id):
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "booked_by_team_id must be one of the two teams")
     application.proposed_date = date
     application.proposed_end_date = end_date
     application.proposed_pitch = pitch
     application.proposed_pitch_address = pitch_address
     application.proposed_by_team_id = actor_team
+    application.proposed_booked_by_team_id = booked_by_team_id
     db.add(
         NegotiationProposal(
             opponent_application_id=application.id,
@@ -221,6 +228,7 @@ async def propose_terms(
             end_date=end_date,
             pitch=pitch,
             pitch_address=pitch_address,
+            booked_by_team_id=booked_by_team_id,
         )
     )
     await db.commit()
@@ -246,7 +254,11 @@ async def agree(db: AsyncSession, application: OpponentApplication, actor: User)
     match is created with the negotiated terms and the search closes."""
     if application.status != ApplicationStatus.ACCEPTED:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "This challenge is not under negotiation")
-    if application.proposed_date is None or application.proposed_pitch is None:
+    if (
+        application.proposed_date is None
+        or application.proposed_pitch is None
+        or application.proposed_booked_by_team_id is None
+    ):
         raise HTTPException(status.HTTP_400_BAD_REQUEST, "No terms have been proposed yet")
     search = await get_search_or_404(db, application.opponent_search_id)
     actor_team = await _actor_team_in_negotiation(db, search, application, actor)
@@ -264,6 +276,7 @@ async def agree(db: AsyncSession, application: OpponentApplication, actor: User)
         city=search.city,
         pitch=application.proposed_pitch,
         date=application.proposed_date,
+        booked_by_team_id=application.proposed_booked_by_team_id,
         status=MatchStatus.CONFIRMED,
     )
     db.add(match)

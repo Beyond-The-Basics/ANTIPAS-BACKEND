@@ -196,10 +196,15 @@ async def test_propose_flips_who_must_agree_and_sets_match_terms(client, db_sess
     # away counter-proposes new terms — now home must be the one to agree
     prop = await client.post(
         f"/api/v1/opponent-applications/{app_b['id']}/propose",
-        json={"date": "2026-09-05T20:30:00", "pitch": "Complexe Sportif"},
+        json={
+            "date": "2026-09-05T20:30:00",
+            "pitch": "Complexe Sportif",
+            "booked_by_team_id": away["id"],
+        },
         headers=auth_header(cap_b["id"]),
     )
     assert prop.status_code == 200 and prop.json()["proposed_by_team_id"] == away["id"]
+    assert prop.json()["proposed_booked_by_team_id"] == away["id"]
 
     # away (proposer) can't agree now
     assert (
@@ -217,6 +222,7 @@ async def test_propose_flips_who_must_agree_and_sets_match_terms(client, db_sess
     # the client renders it back in local time).
     assert match["pitch"] == "Complexe Sportif"
     assert match["date"].startswith("2026-09-05")
+    assert match["booked_by_team_id"] == away["id"]
 
 
 async def test_only_negotiating_teams_can_message(client, db_session):
@@ -273,8 +279,9 @@ async def test_proposal_history_records_seed_and_counters(client, db_session):
     assert first["proposed_by_team_id"] == home["id"]
     assert first["pitch"] == "Stade Municipal"
     assert first["end_date"] is None and first["pitch_address"] is None
+    assert first["booked_by_team_id"] == home["id"]  # seeded: publisher books by default
 
-    # away counters with a full time range + pitch address
+    # away counters with a full time range + pitch address, switching who books
     countered = await client.post(
         f"/api/v1/opponent-applications/{app_b['id']}/propose",
         json={
@@ -282,12 +289,14 @@ async def test_proposal_history_records_seed_and_counters(client, db_session):
             "end_date": "2026-09-05T20:00:00",
             "pitch": "Complexe Sportif OCP",
             "pitch_address": "Ain Sebaa, Casablanca",
+            "booked_by_team_id": away["id"],
         },
         headers=auth_header(cap_b["id"]),
     )
     assert countered.status_code == 200
     assert countered.json()["proposed_end_date"] is not None
     assert countered.json()["proposed_pitch_address"] == "Ain Sebaa, Casablanca"
+    assert countered.json()["proposed_booked_by_team_id"] == away["id"]
 
     history = (
         await client.get(
@@ -296,14 +305,37 @@ async def test_proposal_history_records_seed_and_counters(client, db_session):
     ).json()
     assert len(history) == 2
     assert history[0]["proposed_by_team_id"] == home["id"]
+    assert history[0]["booked_by_team_id"] == home["id"]
     assert history[1]["proposed_by_team_id"] == away["id"]
     assert history[1]["pitch_address"] == "Ain Sebaa, Casablanca"
+    assert history[1]["booked_by_team_id"] == away["id"]
 
     # a non-member is blocked from reading the history, same as chat
     blocked = await client.get(
         f"/api/v1/opponent-applications/{app_b['id']}/proposals", headers=auth_header(stranger["id"])
     )
     assert blocked.status_code == 403
+
+
+async def test_propose_rejects_booked_by_outside_the_two_teams(client, db_session):
+    cap_a = await make_user(client, "CapA", "+15555554043")
+    cap_b = await make_user(client, "CapB", "+15555554044")
+    cap_c = await make_user(client, "CapC", "+15555554045")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
+    other = await completed_team(client, db_session, cap_c, "Other")
+    search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+
+    resp = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/propose",
+        json={"date": "2026-09-05T18:30:00", "pitch": "Complexe Sportif", "booked_by_team_id": other["id"]},
+        headers=auth_header(cap_a["id"]),
+    )
+    assert resp.status_code == 400
 
 
 async def test_cannot_agree_twice(client, db_session):

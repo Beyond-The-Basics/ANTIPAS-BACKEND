@@ -154,6 +154,7 @@ async def propose_terms(
         current_user,
         data.date,
         data.pitch,
+        data.booked_by_team_id,
         end_date=data.end_date,
         pitch_address=data.pitch_address,
     )
@@ -169,6 +170,9 @@ async def propose_terms(
             "proposed_pitch_address": application.proposed_pitch_address,
             "proposed_by_team_id": str(application.proposed_by_team_id)
             if application.proposed_by_team_id
+            else None,
+            "proposed_booked_by_team_id": str(application.proposed_booked_by_team_id)
+            if application.proposed_booked_by_team_id
             else None,
         },
     )

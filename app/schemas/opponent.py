@@ -48,16 +48,18 @@ class OpponentApplicationRead(BaseModel):
     proposed_pitch: str | None
     proposed_pitch_address: str | None
     proposed_by_team_id: uuid.UUID | None
+    proposed_booked_by_team_id: uuid.UUID | None
     created_at: datetime
 
 
 class ProposeTerms(BaseModel):
-    """Either captain proposes a kickoff window and pitch during the negotiation."""
+    """Either captain proposes a kickoff window, pitch, and booking side during the negotiation."""
 
     date: datetime
     end_date: datetime | None = None
     pitch: str = Field(min_length=1, max_length=255)
     pitch_address: str | None = Field(default=None, max_length=255)
+    booked_by_team_id: uuid.UUID
 
 
 class NegotiationMessageCreate(BaseModel):
@@ -86,4 +88,5 @@ class NegotiationProposalRead(BaseModel):
     end_date: datetime | None
     pitch: str
     pitch_address: str | None
+    booked_by_team_id: uuid.UUID
     created_at: datetime
