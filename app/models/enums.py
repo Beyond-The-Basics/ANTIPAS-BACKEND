@@ -21,6 +21,12 @@ class Sport(enum.StrEnum):
     BASKETBALL = "basketball"
 
 
+class Theme(enum.StrEnum):
+    LIGHT = "light"
+    DARK = "dark"
+    SYSTEM = "system"
+
+
 class Gender(enum.StrEnum):
     MALE = "male"
     FEMALE = "female"

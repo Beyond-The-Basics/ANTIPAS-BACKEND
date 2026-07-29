@@ -4,7 +4,7 @@ from sqlalchemy import ARRAY, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base, TimestampMixin, UUIDPKMixin
-from app.models.enums import Gender, str_enum
+from app.models.enums import Gender, Theme, str_enum
 
 if TYPE_CHECKING:
     from app.models.team import TeamMembership
@@ -27,6 +27,9 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     # app/core/security.py `verify_password`).
     password_hash: Mapped[str | None] = mapped_column(String(128), default=None)
     firebase_uid: Mapped[str | None] = mapped_column(String(128), unique=True, index=True, default=None)
+    # Client UI appearance preference. "system" (the default) means the client should follow the
+    # device's OS-level color scheme rather than pinning light or dark.
+    theme: Mapped[Theme] = mapped_column(str_enum(Theme, length=16), default=Theme.SYSTEM)
 
     # --- onboarding profile ----------------------------------------------------
     # Filled in by the post-signup step wizard (`POST /users/me/onboarding/complete`), not at
