@@ -53,6 +53,8 @@ async def update_me(
         if await db.scalar(select(User).where(User.email == data.email, User.id != current_user.id)):
             raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
         current_user.email = data.email
+    if data.theme is not None:
+        current_user.theme = data.theme
     if data.nickname is not None:
         current_user.nickname = data.nickname
     if data.age is not None:
