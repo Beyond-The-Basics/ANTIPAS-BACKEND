@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_verified_user
 from app.db.session import get_db
 from app.models.enums import Sport
 from app.models.search import OpponentApplication
@@ -35,7 +35,7 @@ router = APIRouter(tags=["opponent"])
 async def publish_opponent_search(
     team_id: uuid.UUID,
     data: OpponentSearchCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -61,7 +61,7 @@ async def get_opponent_search(search_id: uuid.UUID, db: AsyncSession = Depends(g
 @router.post("/opponent-searches/{search_id}/withdraw", status_code=status.HTTP_204_NO_CONTENT)
 async def withdraw_opponent_search(
     search_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     search = await opponent_service.get_search_or_404(db, search_id)
@@ -79,7 +79,7 @@ async def withdraw_opponent_search(
 async def apply_to_search(
     search_id: uuid.UUID,
     data: OpponentApplicationCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     search = await opponent_service.get_search_or_404(db, search_id)
@@ -92,7 +92,7 @@ async def apply_to_search(
 )
 async def list_search_applications(
     search_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     search = await opponent_service.get_search_or_404(db, search_id)
@@ -105,7 +105,7 @@ async def list_search_applications(
 )
 async def list_team_applications(
     team_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -118,7 +118,7 @@ async def list_team_applications(
 )
 async def withdraw_application(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await opponent_service.get_application_or_404(db, application_id)
@@ -131,7 +131,7 @@ async def withdraw_application(
 @router.post("/opponent-applications/{application_id}/accept", response_model=OpponentApplicationRead)
 async def accept_challenge(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await opponent_service.get_application_or_404(db, application_id)
@@ -144,7 +144,7 @@ async def accept_challenge(
 async def propose_terms(
     application_id: uuid.UUID,
     data: ProposeTerms,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await opponent_service.get_application_or_404(db, application_id)
@@ -178,7 +178,7 @@ async def propose_terms(
 @router.post("/opponent-applications/{application_id}/agree", response_model=MatchRead)
 async def agree_terms(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await opponent_service.get_application_or_404(db, application_id)
@@ -193,7 +193,7 @@ async def agree_terms(
 )
 async def list_proposals(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await opponent_service.get_application_or_404(db, application_id)
@@ -206,7 +206,7 @@ async def list_proposals(
 )
 async def list_messages(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await opponent_service.get_application_or_404(db, application_id)
@@ -221,7 +221,7 @@ async def list_messages(
 async def post_message(
     application_id: uuid.UUID,
     data: NegotiationMessageCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await opponent_service.get_application_or_404(db, application_id)

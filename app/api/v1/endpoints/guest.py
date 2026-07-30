@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_verified_user
 from app.db.session import get_db
 from app.models.enums import Sport
 from app.models.user import User
@@ -29,7 +29,7 @@ router = APIRouter(tags=["guest"])
 async def publish_guest_search(
     match_id: uuid.UUID,
     data: GuestSearchCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await guest_service.publish_guest_search(db, match_id, current_user, data.team_id)
@@ -54,7 +54,7 @@ async def get_guest_search(search_id: uuid.UUID, db: AsyncSession = Depends(get_
 @router.post("/guest-searches/{search_id}/withdraw", status_code=status.HTTP_204_NO_CONTENT)
 async def withdraw_guest_search(
     search_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     search = await guest_service.get_search_or_404(db, search_id)
@@ -71,7 +71,7 @@ async def withdraw_guest_search(
 )
 async def apply_to_guest_search(
     search_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     search = await guest_service.get_search_or_404(db, search_id)
@@ -84,7 +84,7 @@ async def apply_to_guest_search(
 )
 async def list_search_applications(
     search_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     search = await guest_service.get_search_or_404(db, search_id)
@@ -99,7 +99,7 @@ async def list_search_applications(
 async def invite_guest(
     match_id: uuid.UUID,
     data: GuestInviteCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await guest_service.invite_guest(db, match_id, current_user, data.team_id, data.user_id)
@@ -107,7 +107,7 @@ async def invite_guest(
 
 @router.get("/users/me/guest-applications", response_model=list[GuestApplicationRead])
 async def list_my_applications(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await guest_service.list_my_applications(db, current_user)
@@ -121,7 +121,7 @@ async def list_match_guests(match_id: uuid.UUID, db: AsyncSession = Depends(get_
 @router.post("/guest-applications/{application_id}/accept", response_model=MatchGuestParticipantRead)
 async def accept_application(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await guest_service.get_application_or_404(db, application_id)
@@ -134,7 +134,7 @@ async def accept_application(
 )
 async def decline_application(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await guest_service.get_application_or_404(db, application_id)
@@ -147,7 +147,7 @@ async def decline_application(
 )
 async def withdraw_application(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await guest_service.get_application_or_404(db, application_id)

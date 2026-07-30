@@ -4,7 +4,7 @@ from sqlalchemy import ARRAY, Float, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.db.base_class import Base, TimestampMixin, UUIDPKMixin
-from app.models.enums import Gender, Theme, str_enum
+from app.models.enums import Gender, Locale, Theme, str_enum
 
 if TYPE_CHECKING:
     from app.models.team import TeamMembership
@@ -30,6 +30,10 @@ class User(UUIDPKMixin, TimestampMixin, Base):
     # Client UI appearance preference. "system" (the default) means the client should follow the
     # device's OS-level color scheme rather than pinning light or dark.
     theme: Mapped[Theme] = mapped_column(str_enum(Theme, length=16), default=Theme.SYSTEM)
+    # UI language. Not nullable/wizard-gated like the onboarding fields below — every account has
+    # an active language from the moment it's created, defaulting to English until the client
+    # PATCHes the detected/selected one right after signup.
+    locale: Mapped[Locale] = mapped_column(str_enum(Locale, length=8), default=Locale.EN)
 
     # --- onboarding profile ----------------------------------------------------
     # Filled in by the post-signup step wizard (`POST /users/me/onboarding/complete`), not at

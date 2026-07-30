@@ -68,6 +68,10 @@ internal moderation tooling.
   bottom of the file to go live — route signatures don't change.
 - `app/core/firebase.py` — lazy Firebase Admin init + `verify_id_token`. Phone/OTP happens on the mobile
   client; the backend only verifies the ID token. Needs `FIREBASE_CREDENTIALS_PATH` (service-account JSON).
+- `app/core/resend.py` — the transactional-email provider client, same shape as `firebase.py`. **Nothing
+  above it imports Resend**: domain code depends on the `EmailService` protocol in
+  `app/services/email_service.py`, which falls back to a console stub when `RESEND_API_KEY` is unset, so
+  dev and tests never hit the network. Swapping providers means a new client + a new `EmailService`.
 - `app/schemas/` — Pydantic request/response models (`*Create`/`*Update`/`*Read`); `Read` models use
   `ConfigDict(from_attributes=True)`.
 - `app/services/` — business-logic layer. `team_service.py` (team/membership rules),
@@ -76,8 +80,13 @@ internal moderation tooling.
   `Match`, auto-declines the rest, and closes the search), `match_service.py` (match read/cancel/mark-
   played), `availability_service.py` (PlayerAvailability broadcast — free), `guest_service.py`
   (GuestSearch + GuestApplication; confirming creates a `MatchGuestParticipant`, not a membership —
-  one-off substitute for a confirmed Match), and `credit_service.py` (**stub** `charge_publish` — the
-  real `CreditTransaction` ledger is a later PR). Keep endpoints thin; new domain logic goes here.
+  one-off substitute for a confirmed Match), `email_verification_service.py` (the 6-digit email OTP:
+  one live code per user, 10-minute expiry, 5-attempt cap, 60s resend floor — see below), and
+  `credit_service.py` (**stub** `charge_publish` — the real `CreditTransaction` ledger is a later PR).
+  Keep endpoints thin; new domain logic goes here.
+- `app/services/email_templates.py` — the only user-facing copy rendered server-side, localized to
+  `User.locale` across the three locales the product ships. An email has no client around it to
+  translate it, so new email copy must land in English, French **and** Darija together.
 - `app/workers/` — `celery_app.py` (Celery instance + beat schedule) and `tasks.py`. The beat schedule
   runs `expire_stale_listings` every 10 min; expiring listings and the non-engagement credit refund are
   stubbed and need implementing against the four listing tables.
@@ -102,6 +111,13 @@ These are settled product decisions (see `../ANTIPAS/DATA_MODEL.md`) that aren't
 - **Adding members is mutual-consent** via the `RosterApplication` invite/accept flow (a listings/search
   milestone, not yet built). The team membership endpoints only manage *existing* memberships (roles,
   transfer, leave, remove); creating a team makes the creator its captain.
+- **One live email-verification code per user**, enforced by the unique `user_id` on
+  `email_verifications` rather than by convention — requesting a code deletes the previous row. A
+  6-digit code is only a million values, so safety comes from the policy (10-min expiry, 5-attempt
+  cap, 60s resend floor, bcrypt-hashed storage), not the code. The resend floor is read off the live
+  row's `created_at` instead of Redis, so the limit shares a transaction with what it guards. Codes
+  are sent best-effort on signup and email change: the account write is committed first, because a
+  down mail provider must never roll back a successful registration.
 
 ## Tests
 

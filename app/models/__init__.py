@@ -2,6 +2,7 @@
 
 from app.db.base_class import Base
 from app.models.credit import CreditTransaction
+from app.models.email_verification import EmailVerification
 from app.models.feedback import Dispute, Feedback
 from app.models.game_type import GameType
 from app.models.match import Match, MatchGuestParticipant
@@ -23,6 +24,7 @@ from app.models.user import User
 __all__ = [
     "Base",
     "CreditTransaction",
+    "EmailVerification",
     "Dispute",
     "Feedback",
     "GameType",

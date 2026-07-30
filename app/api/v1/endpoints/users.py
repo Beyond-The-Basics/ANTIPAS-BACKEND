@@ -1,13 +1,16 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_non_production
+from app.core.security import normalize_email
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.services import email_verification_service
+from app.services.email_service import EmailService, get_email_service
 
 router = APIRouter()
 
@@ -21,12 +24,16 @@ router = APIRouter()
 async def create_user(data: UserCreate, db: AsyncSession = Depends(get_db)) -> User:
     """Create a profile with **no credential** — dev and test tooling only, hence the 404 in
     production. `POST /auth/signup` is the real path; a user created here has a null
-    `password_hash` and cannot log in until one is set."""
+    `password_hash` and cannot log in until one is set.
+
+    Minted **already email-verified**: this is the fast-path for a ready-to-use account, so tooling
+    and the test suite don't have to walk the OTP flow just to exercise the features behind the
+    verification gate. Real accounts come through signup and start unverified."""
     if await db.scalar(select(User).where(User.phone == data.phone)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Phone already registered")
     if data.email and await db.scalar(select(User).where(User.email == data.email)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
-    user = User(name=data.name, phone=data.phone, email=data.email)
+    user = User(name=data.name, phone=data.phone, email=data.email, email_verified=True)
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -43,16 +50,29 @@ async def update_me(
     data: UserUpdate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    email_service: EmailService = Depends(get_email_service),
 ) -> User:
     """Partial update. Also used by the onboarding wizard to save each step as the user goes, so a
     refresh mid-wizard doesn't lose progress — see `POST /users/me/onboarding/complete` for the
     flag that marks the whole thing done."""
+    # Changing the address un-verifies the account and re-issues a code; deferred to the end so it
+    # commits after the rest of the patch rather than splitting this update across transactions.
+    new_email: str | None = None
     if data.name is not None:
         current_user.name = data.name
+    if data.locale is not None:
+        current_user.locale = data.locale
     if data.email is not None:
-        if await db.scalar(select(User).where(User.email == data.email, User.id != current_user.id)):
-            raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
-        current_user.email = data.email
+        candidate = normalize_email(data.email)
+        if candidate != current_user.email:
+            # Case-insensitive, matching signup — otherwise "FOO@x.com" walks past a check that
+            # "foo@x.com" would fail and two accounts end up owning the same verified address.
+            clash = await db.scalar(
+                select(User).where(func.lower(User.email) == candidate, User.id != current_user.id)
+            )
+            if clash:
+                raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
+            new_email = candidate
     if data.theme is not None:
         current_user.theme = data.theme
     if data.nickname is not None:
@@ -82,6 +102,11 @@ async def update_me(
     if data.radius_km is not None:
         current_user.radius_km = data.radius_km
     await db.commit()
+
+    if new_email is not None:
+        await email_verification_service.reset_for_new_email(
+            db, current_user, new_email, email_service
+        )
     await db.refresh(current_user)
     return current_user
 
