@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_verified_user
 from app.db.session import get_db
 from app.models.enums import Sport
 from app.models.user import User
@@ -20,7 +20,7 @@ router = APIRouter(tags=["availability"])
 )
 async def publish_availability(
     data: PlayerAvailabilityCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await availability_service.publish(
@@ -55,7 +55,7 @@ async def browse_availability(
 
 @router.get("/users/me/availability", response_model=list[PlayerAvailabilityRead])
 async def list_my_availability(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await availability_service.list_mine(db, current_user)
@@ -72,7 +72,7 @@ async def get_availability(availability_id: uuid.UUID, db: AsyncSession = Depend
 )
 async def withdraw_availability(
     availability_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     availability = await availability_service.get_or_404(db, availability_id)

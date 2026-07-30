@@ -24,12 +24,16 @@ router = APIRouter()
 async def create_user(data: UserCreate, db: AsyncSession = Depends(get_db)) -> User:
     """Create a profile with **no credential** — dev and test tooling only, hence the 404 in
     production. `POST /auth/signup` is the real path; a user created here has a null
-    `password_hash` and cannot log in until one is set."""
+    `password_hash` and cannot log in until one is set.
+
+    Minted **already email-verified**: this is the fast-path for a ready-to-use account, so tooling
+    and the test suite don't have to walk the OTP flow just to exercise the features behind the
+    verification gate. Real accounts come through signup and start unverified."""
     if await db.scalar(select(User).where(User.phone == data.phone)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Phone already registered")
     if data.email and await db.scalar(select(User).where(User.email == data.email)):
         raise HTTPException(status.HTTP_409_CONFLICT, "Email already registered")
-    user = User(name=data.name, phone=data.phone, email=data.email)
+    user = User(name=data.name, phone=data.phone, email=data.email, email_verified=True)
     db.add(user)
     await db.commit()
     await db.refresh(user)

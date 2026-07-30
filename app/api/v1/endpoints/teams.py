@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_verified_user
 from app.db.session import get_db
 from app.models.enums import Sport
 from app.models.user import User
@@ -23,7 +23,7 @@ router = APIRouter()
 @router.post("", response_model=TeamRead, status_code=status.HTTP_201_CREATED)
 async def create_team(
     data: TeamCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await team_service.create_team(db, data, current_user)
@@ -48,7 +48,7 @@ async def get_team(team_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 async def update_team(
     team_id: uuid.UUID,
     data: TeamUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -65,7 +65,7 @@ async def list_members(team_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
 async def transfer_captain(
     team_id: uuid.UUID,
     data: TransferCaptain,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -77,7 +77,7 @@ async def set_member_role(
     team_id: uuid.UUID,
     user_id: uuid.UUID,
     data: RoleUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -89,7 +89,7 @@ async def set_jersey_number(
     team_id: uuid.UUID,
     user_id: uuid.UUID,
     data: JerseyNumberUpdate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -100,7 +100,7 @@ async def set_jersey_number(
 async def set_lineup(
     team_id: uuid.UUID,
     data: LineupSet,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -111,7 +111,7 @@ async def set_lineup(
 async def remove_member(
     team_id: uuid.UUID,
     user_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -121,7 +121,7 @@ async def remove_member(
 @router.post("/{team_id}/leave", status_code=status.HTTP_204_NO_CONTENT)
 async def leave_team(
     team_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)

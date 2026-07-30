@@ -108,6 +108,23 @@ async def get_current_user_via_firebase(
 # Active authentication dependency. Swap the right-hand side to go live with Firebase.
 get_current_user = get_current_user_via_jwt
 
+_EMAIL_NOT_VERIFIED = "Email not verified"
+
+
+async def get_verified_user(current_user: User = Depends(get_current_user)) -> User:
+    """Authentication **plus** the email-verification gate.
+
+    A freshly-signed-up account can authenticate — signup and login both issue a token — but is not
+    yet eligible to use the product. This dependency is what every feature endpoint depends on
+    instead of `get_current_user`, so an unverified account is turned away with `403` everywhere
+    except the handful of routes it needs to *become* verified (`/auth/me`, `/verification/email/*`,
+    and the email-correction `PATCH /users/me`). Blocking here — not at login — keeps returning
+    users able to sign in and finish verifying.
+    """
+    if not current_user.email_verified:
+        raise HTTPException(status.HTTP_403_FORBIDDEN, _EMAIL_NOT_VERIFIED)
+    return current_user
+
 
 async def require_non_production() -> None:
     """Guard for endpoints that bypass authentication and must never be reachable in production."""

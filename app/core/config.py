@@ -37,10 +37,13 @@ class Settings(BaseSettings):
 
     listing_expiry_hours: int = 72
 
-    # Transactional email (Resend). With no API key set, `get_email_service` falls back to the
-    # console implementation, so local dev and the test suite never reach the network.
+    # Transactional email. Brevo is the active provider; Resend is kept as a drop-in alternative.
+    # With no provider key set, `get_email_service` falls back to the console implementation, so
+    # local dev and the test suite never reach the network. `email_from` must be a sender verified
+    # in the active provider's account (Brevo rejects sends from an unvalidated sender).
+    brevo_api_key: str | None = None
     resend_api_key: str | None = None
-    email_from: str = "Kickoff <onboarding@resend.dev>"
+    email_from: str = "Kickoff <no-reply@example.com>"
 
     # Email verification OTP policy. A 6-digit code has only a million values, so the defence is
     # this triple — short expiry, a hard attempt cap, and a resend floor — not code entropy.

@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, Depends, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import get_current_user
+from app.api.deps import get_verified_user
 from app.db.session import get_db
 from app.models.enums import Sport
 from app.models.user import User
@@ -28,7 +28,7 @@ router = APIRouter(tags=["roster"])
 async def publish_roster_search(
     team_id: uuid.UUID,
     data: RosterSearchCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -54,7 +54,7 @@ async def get_roster_search(search_id: uuid.UUID, db: AsyncSession = Depends(get
 @router.post("/roster-searches/{search_id}/close", status_code=status.HTTP_204_NO_CONTENT)
 async def close_roster_search(
     search_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     search = await roster_service.get_search_or_404(db, search_id)
@@ -71,7 +71,7 @@ async def close_roster_search(
 )
 async def apply_to_search(
     search_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     search = await roster_service.get_search_or_404(db, search_id)
@@ -84,7 +84,7 @@ async def apply_to_search(
 )
 async def list_search_applications(
     search_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     search = await roster_service.get_search_or_404(db, search_id)
@@ -99,7 +99,7 @@ async def list_search_applications(
 async def invite_player(
     team_id: uuid.UUID,
     data: RosterInviteCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -112,7 +112,7 @@ async def invite_player(
 )
 async def list_team_applications(
     team_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     team = await team_service.get_team_or_404(db, team_id)
@@ -121,7 +121,7 @@ async def list_team_applications(
 
 @router.get("/users/me/roster-applications", response_model=list[RosterApplicationRead])
 async def list_my_applications(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     return await roster_service.list_my_applications(db, current_user)
@@ -133,7 +133,7 @@ async def list_my_applications(
 )
 async def accept_application(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await roster_service.get_application_or_404(db, application_id)
@@ -146,7 +146,7 @@ async def accept_application(
 )
 async def decline_application(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await roster_service.get_application_or_404(db, application_id)
@@ -159,7 +159,7 @@ async def decline_application(
 )
 async def withdraw_application(
     application_id: uuid.UUID,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_verified_user),
     db: AsyncSession = Depends(get_db),
 ):
     application = await roster_service.get_application_or_404(db, application_id)

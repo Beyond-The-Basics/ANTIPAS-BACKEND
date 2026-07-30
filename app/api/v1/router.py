@@ -14,6 +14,10 @@ from app.api.v1.endpoints import (
     verification,
 )
 
+# The email-verification gate is applied per-endpoint, not here: browse/read endpoints in this API
+# are public (anonymous), and only the *authenticated actions* carry auth. Those actions depend on
+# `get_verified_user` instead of `get_current_user`, so an unverified account can still read public
+# listings and manage its own signup/verification, but cannot act as a user until it verifies.
 api_router = APIRouter()
 api_router.include_router(health.router)
 api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
