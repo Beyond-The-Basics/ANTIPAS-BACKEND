@@ -40,6 +40,11 @@ select = ["E", "F", "I", "UP", "B"]
 # B008: FastAPI's Depends()/Query() default-argument pattern is idiomatic, not a bug.
 ignore = ["B008"]
 
+[tool.ruff.lint.per-file-ignores]
+# One row per pitch, regenerated from a Places export — the maps_url alone blows the line budget,
+# and wrapping the rows would make the file diff badly on the next re-seed.
+"app/db/pitch_catalog.py" = ["E501"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
