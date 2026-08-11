@@ -1,7 +1,7 @@
 """Add pitch catalog and booked_by_team_id to negotiation
 
 Revision ID: 134dd592cece
-Revises: e222e09c0502
+Revises: bdf9857deb2a
 Create Date: 2026-07-28 11:05:24.317087
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = '134dd592cece'
-down_revision: Union[str, Sequence[str], None] = 'e222e09c0502'
+down_revision: Union[str, Sequence[str], None] = 'bdf9857deb2a'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
