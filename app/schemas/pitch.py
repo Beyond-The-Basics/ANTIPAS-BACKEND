@@ -3,21 +3,20 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.models.pitch import DEFAULT_COUNTRY
+
 
 class PitchCreate(BaseModel):
-    name: str = Field(min_length=1, max_length=120)
+    name: str = Field(min_length=1, max_length=160)
+    country: str = Field(default=DEFAULT_COUNTRY, min_length=1, max_length=60)
     city: str = Field(min_length=1, max_length=120)
-    price_per_hour: float | None = Field(default=None, gt=0)
-    is_neutral: bool = False
 
 
 class PitchRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
-    team_id: uuid.UUID
     name: str
+    country: str
     city: str
-    price_per_hour: float | None
-    is_neutral: bool
     created_at: datetime

@@ -1,48 +1,47 @@
-"""Pitch domain logic — the venue catalog a captain picks from when negotiating a match, instead
-of typing a pitch name freehand every time. See `app/models/pitch.py` for how ownership vs.
-`is_neutral` map to the negotiation UI's "your city"/"their city"/"neutral for both" labels."""
+"""Pitch domain logic — the shared venue directory a team picks from when negotiating a match,
+instead of typing a pitch name freehand every time. Venues belong to nobody: see
+`app/models/pitch.py` for why `(name, country, city)` is the identity."""
 
-from sqlalchemy import or_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.pitch import Pitch
-from app.models.search import OpponentApplication
-from app.models.team import Team
-from app.models.user import User
 from app.schemas.pitch import PitchCreate
-from app.services import opponent_service, team_service
 
 
-async def create_pitch(db: AsyncSession, team: Team, actor: User, data: PitchCreate) -> Pitch:
-    await team_service.require_role(db, team.id, actor, team_service.CAPTAIN_OR_ADMIN)
-    pitch = Pitch(
-        team_id=team.id,
-        name=data.name,
-        city=data.city,
-        price_per_hour=data.price_per_hour,
-        is_neutral=data.is_neutral,
+async def get_or_create_pitch(db: AsyncSession, data: PitchCreate) -> tuple[Pitch, bool]:
+    """Return the venue with this name in this city, adding it if it isn't there yet, and whether
+    it had to be added.
+
+    Creation is idempotent rather than a 409 because two captains adding "Stade Municipal" on the
+    same evening are describing one venue, not colliding. The match is case-insensitive so a
+    hand-typed "stade municipal" lands on the seeded row instead of shadowing it, which is also
+    what makes `seed_pitches` a no-op on re-run. The flag is what lets callers tell the two apart —
+    the endpoint answers 200 vs 201 with it, the seeder counts with it.
+    """
+    name = data.name.strip()
+    existing = await db.scalar(
+        select(Pitch).where(
+            func.lower(Pitch.name) == name.lower(),
+            Pitch.country == data.country,
+            Pitch.city == data.city,
+        )
     )
+    if existing is not None:
+        return existing, False
+
+    pitch = Pitch(name=name, country=data.country, city=data.city)
     db.add(pitch)
     await db.commit()
     await db.refresh(pitch)
-    return pitch
+    return pitch, True
 
 
-async def list_pitches_for_negotiation(
-    db: AsyncSession, application: OpponentApplication, actor: User
-) -> list[Pitch]:
-    """Pitches selectable in this negotiation: either team's own catalog, plus anyone's pitches
-    marked neutral. Same auth as chat/proposals — only the two teams' captains/admins."""
-    search = await opponent_service.get_search_or_404(db, application.opponent_search_id)
-    await opponent_service.authorize_negotiation_member(db, application, actor)
-    result = await db.scalars(
-        select(Pitch)
-        .where(
-            or_(
-                Pitch.team_id.in_((search.team_id, application.responding_team_id)),
-                Pitch.is_neutral.is_(True),
-            )
-        )
-        .order_by(Pitch.created_at)
-    )
+async def list_pitches(db: AsyncSession, country: str, city: str | None = None) -> list[Pitch]:
+    """The directory for a country, narrowed to one city when given. Ordered by name: with no
+    coordinates stored there is no distance to sort by, and alphabetical is what a select needs."""
+    query = select(Pitch).where(Pitch.country == country)
+    if city:
+        query = query.where(Pitch.city == city)
+    result = await db.scalars(query.order_by(Pitch.name))
     return list(result)
