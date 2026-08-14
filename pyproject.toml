@@ -4,20 +4,20 @@ version = "0.1.0"
 description = "Kickoff App backend — sports matchmaking API (FastAPI + async SQLAlchemy + Postgres)."
 requires-python = ">=3.12"
 dependencies = [
-    "alembic>=1.18.5",
+    "alembic>=1.19.1",
     "asyncpg>=0.31.0",
     "bcrypt>=4.2.1",
     "celery[redis]>=5.6.3",
     "email-validator>=2.2.0",
-    "fastapi>=0.139.2",
+    "fastapi>=0.141.1",
     "firebase-admin>=7.5.0",
-    "pydantic-settings>=2.14.2",
+    "pydantic-settings>=2.15.0",
     "pyjwt>=2.10.1",
     "python-multipart>=0.0.32",
     "redis>=6.4.0",
-    "sqladmin>=0.29.0",
-    "sqlalchemy[asyncio]>=2.0",
-    "uvicorn[standard]>=0.51.0",
+    "sqladmin>=0.31.0",
+    "sqlalchemy[asyncio]>=2.0.51",
+    "uvicorn[standard]>=0.52.1",
 ]
 
 [dependency-groups]
@@ -25,7 +25,7 @@ dev = [
     "httpx>=0.28.1",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
-    "ruff>=0.15.22",
+    "ruff>=0.16.2",
 ]
 
 [tool.ruff]
