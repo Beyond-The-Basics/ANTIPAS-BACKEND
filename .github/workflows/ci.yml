@@ -6,14 +6,25 @@ on:
   pull_request:
     branches: [main]
 
-# Cancel superseded runs on the same ref.
+# Least privilege for the GITHUB_TOKEN. Jobs that need more ask for it explicitly.
+permissions:
+  contents: read
+
+# Cancel superseded PR runs, but let every commit on main finish
+# (you want a result for each main commit once deploys depend on it).
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # Pinned tool versions: bump these deliberately (check the releases pages).
+  GITLEAKS_VERSION: v8.21.2
+  TRIVY_VERSION: 0.58.1
 
 jobs:
   lint:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -23,17 +34,20 @@ jobs:
           python-version: "3.12"
           enable-cache: true
 
+      # --locked fails if uv.lock is out of sync with pyproject.toml
+      # (--frozen silently skips that check).
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --locked
 
       - name: Ruff lint
-        run: uv run ruff check ./app
+        run: uv run ruff check .
 
       - name: Ruff format check
-        run: uv run ruff format --check ./app
+        run: uv run ruff format --check .
 
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     services:
       postgres:
@@ -63,30 +77,32 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --frozen
+        run: uv sync --locked
 
+      # Requires pytest-cov as a dev dependency: `uv add --dev pytest-cov`.
+      # Set --cov-fail-under to your current coverage, then raise it over time.
       - name: Run tests
-        run: uv run pytest -q
+        run: uv run pytest -q --cov=app --cov-report=term-missing --cov-fail-under=70
 
   secrets:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
-          # Full history, not just this ref — gitleaks' `git` mode scans commit diffs, so a
-          # secret committed and later removed from the working tree is still caught.
           fetch-depth: 0
 
+      # Run as the runner's user so git inside the container doesn't reject
+      # the mounted repo with a "dubious ownership" error.
       - name: Gitleaks
-        # The gitleaks CLI itself is free and open source; only the gitleaks-action wrapper
-        # requires a paid GITLEAKS_LICENSE for organization-owned repos. Running the image
-        # directly avoids that entirely.
         run: |
-          docker run --rm -v "$PWD:/repo" ghcr.io/gitleaks/gitleaks:latest \
+          docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/repo" \
+            ghcr.io/gitleaks/gitleaks:${GITLEAKS_VERSION} \
             git --redact --no-banner -v /repo
 
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     needs: [lint, test, secrets]
     steps:
       - uses: actions/checkout@v4
@@ -94,11 +110,20 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # load: true puts the image into the local Docker daemon so it can be scanned.
       - name: Build image
         uses: docker/build-push-action@v6
         with:
           context: .
           push: false
+          load: true
           tags: antipas-backend:${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+      - name: Scan image for vulnerabilities
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:${TRIVY_VERSION} image \
+            --exit-code 1 --severity CRITICAL,HIGH --ignore-unfixed --no-progress \
+            antipas-backend:${{ github.sha }}
