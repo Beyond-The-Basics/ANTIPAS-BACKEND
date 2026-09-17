@@ -40,10 +40,10 @@ jobs:
         run: uv sync --locked
 
       - name: Ruff lint
-        run: uv run ruff check .
+        run: uv run ruff check ./app
 
       - name: Ruff format check
-        run: uv run ruff format --check .
+        run: uv run ruff format --check ./app
 
   test:
     runs-on: ubuntu-latest
