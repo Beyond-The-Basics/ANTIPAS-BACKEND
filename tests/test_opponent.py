@@ -367,6 +367,67 @@ async def test_decline_releases_the_search_for_another_challenger(client, db_ses
     assert accepted.json()["status"] == "accepted"
 
 
+async def test_accepting_takes_the_search_off_the_board_and_declining_puts_it_back(
+    client, db_session
+):
+    """A search under negotiation stops being browsable, then comes back if the talks collapse.
+
+    Listing it while a negotiation is live only invites challenges that `accept_challenge` is
+    guaranteed to reject with a 409.
+    """
+    cap_a = await make_user(client, "CapA", "+15555554111")
+    cap_b = await make_user(client, "CapB", "+15555554112")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
+    search = (await publish(client, db_session, home["id"], cap_a["id"], city="Tangier")).json()
+
+    def ids(resp):
+        return [s["id"] for s in resp.json()]
+
+    listed = await client.get("/api/v1/opponent-searches?city=Tangier")
+    assert search["id"] in ids(listed)
+
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+
+    during = await client.get("/api/v1/opponent-searches?city=Tangier")
+    assert search["id"] not in ids(during), "a search under negotiation must not be browsable"
+
+    # Hidden from the board, but still readable by id — the two teams' pages depend on that.
+    detail = await client.get(f"/api/v1/opponent-searches/{search['id']}")
+    assert detail.status_code == 200
+    assert detail.json()["status"] == "open"
+
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/decline", headers=auth_header(cap_a["id"])
+    )
+
+    after = await client.get("/api/v1/opponent-searches?city=Tangier")
+    assert search["id"] in ids(after), "declining must put the search back on the board"
+
+
+async def test_agreeing_keeps_the_search_off_the_board(client, db_session):
+    """Confirmed is terminal: `agree` closes the search, so it stays gone rather than returning."""
+    cap_a = await make_user(client, "CapA", "+15555554113")
+    cap_b = await make_user(client, "CapB", "+15555554114")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
+    search = (await publish(client, db_session, home["id"], cap_a["id"], city="Agadir")).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+    agreed = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/agree", headers=auth_header(cap_b["id"])
+    )
+    assert agreed.status_code == 200
+
+    listed = await client.get("/api/v1/opponent-searches?city=Agadir")
+    assert search["id"] not in [s["id"] for s in listed.json()]
+
+
 async def test_either_team_can_decline(client, db_session):
     """The challenger can walk away too, not just the team that accepted the challenge."""
     cap_a = await make_user(client, "CapA", "+15555554104")
