@@ -187,6 +187,22 @@ async def agree_terms(
     return match
 
 
+@router.post(
+    "/opponent-applications/{application_id}/decline",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+async def decline_challenge(
+    application_id: uuid.UUID,
+    current_user: User = Depends(get_verified_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Walk away from a negotiation. Either team's captain/admin may; the search stays open."""
+    application = await opponent_service.get_application_or_404(db, application_id)
+    await opponent_service.decline_challenge(db, application, current_user)
+    # Tell the other side's open modal, the same way accept/propose/agree do.
+    await hub.broadcast(str(application_id), {"type": "declined"})
+
+
 @router.get(
     "/opponent-applications/{application_id}/proposals",
     response_model=list[NegotiationProposalRead],

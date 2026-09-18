@@ -72,6 +72,17 @@ async def list_opponent_searches(
     db: AsyncSession, city: str | None, sport: Sport | None, limit: int, offset: int
 ) -> list[OpponentSearch]:
     stmt = select(OpponentSearch).where(OpponentSearch.status == ListingStatus.OPEN)
+    # A search with a live negotiation comes off the board. `accept_challenge` refuses a second one
+    # while any application is ACCEPTED, so leaving it listed only invites challenges that are
+    # guaranteed to be turned away with a 409.
+    #
+    # Derived from the application state rather than stamped onto `OpponentSearch.status`, so the
+    # search returns to the board on its own the moment the negotiation ends in a decline — no
+    # second status to write, and no way for the two to drift apart.
+    negotiating = select(OpponentApplication.opponent_search_id).where(
+        OpponentApplication.status == ApplicationStatus.ACCEPTED
+    )
+    stmt = stmt.where(OpponentSearch.id.not_in(negotiating))
     if city is not None:
         stmt = stmt.where(OpponentSearch.city == city)
     if sport is not None:
@@ -283,6 +294,26 @@ async def agree(db: AsyncSession, application: OpponentApplication, actor: User)
     await db.commit()
     await db.refresh(match)
     return match
+
+
+async def decline_challenge(db: AsyncSession, application: OpponentApplication, actor: User) -> None:
+    """Either side walks away from a negotiation that is not converging.
+
+    The counterpart to `agree`. Until now a challenge could only be abandoned while it was still
+    PENDING (`withdraw_application`); once accepted, the two teams were stuck trading proposals with
+    no way out, and the publishing team could not accept anyone else because `accept_challenge`
+    refuses a second negotiation while one is ACCEPTED.
+
+    The search itself is left OPEN — `agree` is what closes it. So declining releases the block and
+    the publishing team can accept another challenger, which is the whole point.
+    """
+    if application.status != ApplicationStatus.ACCEPTED:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This challenge is not under negotiation")
+    search = await get_search_or_404(db, application.opponent_search_id)
+    # Either team may decline: whoever is looking at an offer they do not want.
+    await _actor_team_in_negotiation(db, search, application, actor)
+    application.status = ApplicationStatus.DECLINED
+    await db.commit()
 
 
 async def authorize_negotiation_member(
