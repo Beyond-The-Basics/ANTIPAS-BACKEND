@@ -285,6 +285,26 @@ async def agree(db: AsyncSession, application: OpponentApplication, actor: User)
     return match
 
 
+async def decline_challenge(db: AsyncSession, application: OpponentApplication, actor: User) -> None:
+    """Either side walks away from a negotiation that is not converging.
+
+    The counterpart to `agree`. Until now a challenge could only be abandoned while it was still
+    PENDING (`withdraw_application`); once accepted, the two teams were stuck trading proposals with
+    no way out, and the publishing team could not accept anyone else because `accept_challenge`
+    refuses a second negotiation while one is ACCEPTED.
+
+    The search itself is left OPEN — `agree` is what closes it. So declining releases the block and
+    the publishing team can accept another challenger, which is the whole point.
+    """
+    if application.status != ApplicationStatus.ACCEPTED:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "This challenge is not under negotiation")
+    search = await get_search_or_404(db, application.opponent_search_id)
+    # Either team may decline: whoever is looking at an offer they do not want.
+    await _actor_team_in_negotiation(db, search, application, actor)
+    application.status = ApplicationStatus.DECLINED
+    await db.commit()
+
+
 async def authorize_negotiation_member(
     db: AsyncSession, application: OpponentApplication, actor: User
 ) -> uuid.UUID:

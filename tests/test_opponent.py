@@ -326,6 +326,120 @@ async def test_cannot_agree_twice(client, db_session):
     assert second.status_code == 400
 
 
+async def test_decline_releases_the_search_for_another_challenger(client, db_session):
+    """Declining is the way out of a negotiation that is not converging.
+
+    The search stays OPEN, so the block `accept_challenge` puts on a second negotiation lifts and
+    the publishing team can take a different challenger.
+    """
+    cap_a = await make_user(client, "CapA", "+15555554101")
+    cap_b = await make_user(client, "CapB", "+15555554102")
+    cap_c = await make_user(client, "CapC", "+15555554103")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
+    third = await completed_team(client, db_session, cap_c, "Third")
+    search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
+
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    app_c = await _apply(client, search["id"], third["id"], cap_c["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+
+    # While B is under negotiation, C cannot be accepted.
+    blocked = await client.post(
+        f"/api/v1/opponent-applications/{app_c['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+    assert blocked.status_code == 409
+
+    declined = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/decline", headers=auth_header(cap_a["id"])
+    )
+    assert declined.status_code == 204, declined.text
+
+    after = await client.get(f"/api/v1/opponent-searches/{search['id']}")
+    assert after.json()["status"] == "open"
+
+    accepted = await client.post(
+        f"/api/v1/opponent-applications/{app_c['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+    assert accepted.status_code == 200, accepted.text
+    assert accepted.json()["status"] == "accepted"
+
+
+async def test_either_team_can_decline(client, db_session):
+    """The challenger can walk away too, not just the team that accepted the challenge."""
+    cap_a = await make_user(client, "CapA", "+15555554104")
+    cap_b = await make_user(client, "CapB", "+15555554105")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
+    search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+
+    resp = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/decline", headers=auth_header(cap_b["id"])
+    )
+    assert resp.status_code == 204, resp.text
+
+
+async def test_decline_requires_a_live_negotiation_and_a_manager(client, db_session):
+    cap_a = await make_user(client, "CapA", "+15555554106")
+    cap_b = await make_user(client, "CapB", "+15555554107")
+    outsider = await make_user(client, "Outsider", "+15555554108")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
+    search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+
+    # Still PENDING, so there is no negotiation to decline yet.
+    too_early = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/decline", headers=auth_header(cap_a["id"])
+    )
+    assert too_early.status_code == 400
+
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+
+    stranger = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/decline", headers=auth_header(outsider["id"])
+    )
+    assert stranger.status_code == 403
+
+    first = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/decline", headers=auth_header(cap_a["id"])
+    )
+    assert first.status_code == 204
+    # Declining twice is no longer a live negotiation either.
+    again = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/decline", headers=auth_header(cap_a["id"])
+    )
+    assert again.status_code == 400
+
+
+async def test_cannot_agree_after_declining(client, db_session):
+    cap_a = await make_user(client, "CapA", "+15555554109")
+    cap_b = await make_user(client, "CapB", "+15555554110")
+    home = await completed_team(client, db_session, cap_a, "Home")
+    away = await completed_team(client, db_session, cap_b, "Away")
+    search = (await publish(client, db_session, home["id"], cap_a["id"])).json()
+    app_b = await _apply(client, search["id"], away["id"], cap_b["id"])
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/accept", headers=auth_header(cap_a["id"])
+    )
+    await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/decline", headers=auth_header(cap_a["id"])
+    )
+
+    resp = await client.post(
+        f"/api/v1/opponent-applications/{app_b['id']}/agree", headers=auth_header(cap_b["id"])
+    )
+    assert resp.status_code == 400
+
+
 # --- Match lifecycle ----------------------------------------------------------
 
 
